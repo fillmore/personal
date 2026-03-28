@@ -5,6 +5,7 @@ set -euo pipefail
 ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
 PLUGINS_DIR="$ZSH_CUSTOM/plugins"
 ZSHRC="$HOME/.zshrc"
+STARSHIP_CONFIG_FILE="${STARSHIP_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/starship.toml}"
 
 # Plugins
 AUTOSUGGEST_REPO="https://github.com/zsh-users/zsh-autosuggestions.git"
@@ -110,7 +111,30 @@ ensure_plugins_in_zshrc() {
     printf '\nplugins=(git zsh-autosuggestions zsh-autocomplete zsh-syntax-highlighting)\n' >> "$ZSHRC"
   fi
 
-  # Ensure syntax-highlighting is sourced LAST (recommended by plugin)
+  # Ensure custom plugins are sourced from ~/.zshrc as well.
+  if ! grep -qE 'zsh-autosuggestions(\.plugin)?\.zsh' "$ZSHRC"; then
+    log "Ensuring zsh-autosuggestions is sourced in ~/.zshrc..."
+    cat >> "$ZSHRC" <<'EOF'
+
+# Ensure autosuggestions loads
+if [ -f "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" ]; then
+  source "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh"
+fi
+EOF
+  fi
+
+  if ! grep -qE 'zsh-autocomplete(\.plugin)?\.zsh' "$ZSHRC"; then
+    log "Ensuring zsh-autocomplete is sourced in ~/.zshrc..."
+    cat >> "$ZSHRC" <<'EOF'
+
+# Ensure autocomplete loads
+if [ -f "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-autocomplete/zsh-autocomplete.plugin.zsh" ]; then
+  source "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-autocomplete/zsh-autocomplete.plugin.zsh"
+fi
+EOF
+  fi
+
+  # Keep syntax-highlighting sourced LAST (recommended by plugin)
   if ! grep -qE 'zsh-syntax-highlighting\.zsh' "$ZSHRC"; then
     log "Ensuring zsh-syntax-highlighting is sourced near the end of ~/.zshrc..."
     cat >> "$ZSHRC" <<'EOF'
@@ -144,6 +168,41 @@ if command -v starship >/dev/null 2>&1; then
   eval "$(starship init zsh)"
 fi
 EOF
+}
+
+ensure_starship_config() {
+  if ! have starship; then
+    warn "starship command not found; skipping Starship preset configuration."
+    return
+  fi
+
+  mkdir -p "$(dirname "$STARSHIP_CONFIG_FILE")"
+
+  local tmp
+  tmp="$(mktemp)"
+
+  log "Setting Starship preset to catppuccin-powerline..."
+  starship preset catppuccin-powerline -o "$tmp"
+
+  if grep -qE '^[[:space:]]*add_newline[[:space:]]*=' "$tmp"; then
+    perl -0pi -e 's/^[ \t]*add_newline[ \t]*=.*/add_newline = true/m' "$tmp"
+  else
+    perl -0pi -e 'BEGIN { local $/; $_ = <>; print "add_newline = true\n\n$_"; exit }' "$tmp"
+  fi
+
+  # Force the prompt line-break on, even if the preset defines it differently.
+  if grep -qE '^\[line_break\]' "$tmp"; then
+    perl -0pi -e 's/\[line_break\]\n(?:.*\n)*?(?=\n\[|\z)/[line_break]\ndisabled = false\n/sm' "$tmp"
+  else
+    cat >> "$tmp" <<'EOF'
+
+[line_break]
+disabled = false
+EOF
+  fi
+
+  mv "$tmp" "$STARSHIP_CONFIG_FILE"
+  log "Starship config written to $STARSHIP_CONFIG_FILE"
 }
 
 offer_set_default_shell() {
@@ -187,6 +246,7 @@ main() {
   log "Updating ~/.zshrc..."
   ensure_plugins_in_zshrc
   ensure_starship_in_zshrc
+  ensure_starship_config
 
   log "Done."
   echo "Next: start a new terminal, or run: exec zsh"
