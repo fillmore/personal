@@ -6,6 +6,7 @@ ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
 PLUGINS_DIR="$ZSH_CUSTOM/plugins"
 ZSHRC="$HOME/.zshrc"
 STARSHIP_CONFIG_FILE="${STARSHIP_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/starship.toml}"
+GHOSTTY_CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/ghostty/config.ghostty"
 
 # Plugins
 AUTOSUGGEST_REPO="https://github.com/zsh-users/zsh-autosuggestions.git"
@@ -44,6 +45,7 @@ install_packages() {
       log "Installing packages via brew..."
       brew update
       brew install zsh git curl starship || true
+      brew install --cask ghostty || warn "Ghostty install failed; try manually: brew install --cask ghostty"
       ;;
     debian)
       log "Installing packages via apt..."
@@ -205,6 +207,43 @@ EOF
   log "Starship config written to $STARSHIP_CONFIG_FILE"
 }
 
+upsert_ghostty_setting() {
+  local key="$1"
+  local value="$2"
+
+  if grep -qE "^[[:space:]]*${key}[[:space:]]*=" "$GHOSTTY_CONFIG_FILE"; then
+    perl -0pi -e 's/^[ \t]*'"$key"'[ \t]*=.*/'"$key"' = '"$value"'/m' "$GHOSTTY_CONFIG_FILE"
+  else
+    printf '%s = %s\n' "$key" "$value" >> "$GHOSTTY_CONFIG_FILE"
+  fi
+}
+
+ensure_ghostty_config() {
+  local os
+  os="$(detect_os)"
+
+  if [[ "$os" != "macos" ]]; then
+    return
+  fi
+
+  mkdir -p "$(dirname "$GHOSTTY_CONFIG_FILE")"
+  [[ -f "$GHOSTTY_CONFIG_FILE" ]] || touch "$GHOSTTY_CONFIG_FILE"
+
+  if ! grep -qF '# Ghostty theme and appearance' "$GHOSTTY_CONFIG_FILE"; then
+    printf '\n# Ghostty theme and appearance\n' >> "$GHOSTTY_CONFIG_FILE"
+  fi
+
+  upsert_ghostty_setting "theme" "TokyoNight"
+  upsert_ghostty_setting "background-opacity" "0.92"
+  upsert_ghostty_setting "background-blur" "20"
+  upsert_ghostty_setting "window-padding-x" "12"
+  upsert_ghostty_setting "window-padding-y" "10"
+  upsert_ghostty_setting "window-theme" "dark"
+  upsert_ghostty_setting "macos-titlebar-style" "transparent"
+
+  log "Ghostty theme and appearance configured in $GHOSTTY_CONFIG_FILE"
+}
+
 offer_set_default_shell() {
   local zsh_path
   zsh_path="$(command -v zsh || true)"
@@ -247,6 +286,9 @@ main() {
   ensure_plugins_in_zshrc
   ensure_starship_in_zshrc
   ensure_starship_config
+
+  log "Configuring Ghostty..."
+  ensure_ghostty_config
 
   log "Done."
   echo "Next: start a new terminal, or run: exec zsh"
