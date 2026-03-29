@@ -33,24 +33,103 @@ detect_os() {
   fi
 }
 
+ensure_git_on_macos() {
+  if have git; then
+    return
+  fi
+
+  warn "Git not found. Installing Xcode Command Line Tools..."
+  xcode-select --install || true
+
+  if ! have git; then
+    die "Git is still unavailable. Complete the Command Line Tools installation, then re-run this script."
+  fi
+}
+
+ensure_homebrew() {
+  if have brew; then
+    return
+  fi
+
+  log "Homebrew not found. Installing Homebrew..."
+  NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+  if [[ -x /opt/homebrew/bin/brew ]]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+  elif [[ -x /usr/local/bin/brew ]]; then
+    eval "$(/usr/local/bin/brew shellenv)"
+  fi
+
+  have brew || die "Homebrew installation failed. Install it manually from https://brew.sh/ and re-run."
+}
+
+install_zellij_binary() {
+  local os arch target url tmpdir bindir
+  os="$(detect_os)"
+  arch="$(uname -m)"
+
+  case "$os:$arch" in
+    debian:x86_64|debian:amd64)
+      target="x86_64-unknown-linux-musl"
+      ;;
+    debian:aarch64|debian:arm64)
+      target="aarch64-unknown-linux-musl"
+      ;;
+    macos:x86_64)
+      target="x86_64-apple-darwin"
+      ;;
+    macos:arm64|macos:aarch64)
+      target="aarch64-apple-darwin"
+      ;;
+    *)
+      warn "No prebuilt zellij binary mapping is available for $os/$arch in this script."
+      return 1
+      ;;
+  esac
+
+  url="https://github.com/zellij-org/zellij/releases/latest/download/zellij-${target}.tar.gz"
+  tmpdir="$(mktemp -d)"
+  bindir="$HOME/.local/bin"
+
+  log "Installing zellij from the latest prebuilt release binary..."
+  mkdir -p "$bindir"
+  curl -fL "$url" -o "$tmpdir/zellij.tar.gz"
+  tar -xzf "$tmpdir/zellij.tar.gz" -C "$tmpdir"
+  install -m 755 "$tmpdir/zellij" "$bindir/zellij"
+  rm -rf "$tmpdir"
+
+  log "zellij installed to $bindir/zellij"
+}
+
 install_packages() {
   local os
   os="$(detect_os)"
 
   case "$os" in
     macos)
-      if ! have brew; then
-        die "Homebrew not found. Install it first: https://brew.sh/"
-      fi
+      ensure_git_on_macos
+      ensure_homebrew
       log "Installing packages via brew..."
       brew update
-      brew install zsh git curl starship || true
+      brew install zsh git curl starship zellij || true
       brew install --cask ghostty || warn "Ghostty install failed; try manually: brew install --cask ghostty"
       ;;
     debian)
       log "Installing packages via apt..."
       sudo apt-get update -y
       sudo apt-get install -y zsh git curl
+      if apt-cache show zellij >/dev/null 2>&1; then
+        sudo apt-get install -y zellij
+      elif have snap; then
+        log "Installing zellij via snap..."
+        if ! sudo snap install zellij --classic; then
+          warn "Snap install failed; falling back to the prebuilt zellij binary..."
+          install_zellij_binary
+        fi
+      else
+        warn "zellij is not available via apt on this system and snap is not installed; falling back to the prebuilt binary."
+        install_zellij_binary
+      fi
       # Prefer distro package if available; fall back to official installer
       if sudo apt-get install -y starship; then
         true
@@ -60,7 +139,7 @@ install_packages() {
       fi
       ;;
     *)
-      die "Unsupported OS. Please install zsh, git, curl, and starship manually and re-run."
+      die "Unsupported OS. Please install zsh, git, curl, starship, and zellij manually and re-run."
       ;;
   esac
 }
@@ -98,6 +177,28 @@ ensure_plugins_in_zshrc() {
   if ! grep -qE '^export ZSH=' "$ZSHRC" && ! grep -qE '^ZSH=' "$ZSHRC"; then
     warn "ZSH path not found in ~/.zshrc. Adding default."
     printf '\nexport ZSH="$HOME/.oh-my-zsh"\n' >> "$ZSHRC"
+  fi
+
+  if ! grep -qF 'brew shellenv' "$ZSHRC"; then
+    log "Ensuring Homebrew is available in future zsh sessions..."
+    cat >> "$ZSHRC" <<'EOF'
+
+# Homebrew
+if [ -x /opt/homebrew/bin/brew ]; then
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+elif [ -x /usr/local/bin/brew ]; then
+  eval "$(/usr/local/bin/brew shellenv)"
+fi
+EOF
+  fi
+
+  if ! grep -qF '$HOME/.local/bin' "$ZSHRC"; then
+    log "Ensuring ~/.local/bin is on PATH in ~/.zshrc..."
+    cat >> "$ZSHRC" <<'EOF'
+
+# User-local binaries
+export PATH="$HOME/.local/bin:$PATH"
+EOF
   fi
 
   # Ensure plugins line exists and includes ours.
