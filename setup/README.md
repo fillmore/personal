@@ -15,6 +15,7 @@ The script sets up:
 - `zsh`, `git`, `curl`
 - [`starship`](https://starship.rs/) prompt
 - [`zellij`](https://zellij.dev/)
+- Saved Zellij IDE layout: `zellij --layout ide` or `zjide`
 - [`oh-my-zsh`](https://ohmyz.sh/)
 - Zsh plugins:
   - `zsh-autosuggestions`
@@ -74,6 +75,7 @@ This avoids compiling Rust from source.
 
 - `~/.zshrc`
 - `~/.config/starship.toml`
+- `~/.config/zellij/layouts/ide.kdl`
 - `~/.config/ghostty/config.ghostty` *(macOS only)*
 
 It also ensures `~/.local/bin` is on your `PATH` when needed.
@@ -95,4 +97,12 @@ Open a new terminal or run:
 
 ```bash
 exec zsh
+```
+
+To launch the saved split layout shown in the screenshot style:
+
+```bash
+zjide
+# or
+zellij --layout ide
 ```

@@ -6,6 +6,8 @@ ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
 PLUGINS_DIR="$ZSH_CUSTOM/plugins"
 ZSHRC="$HOME/.zshrc"
 STARSHIP_CONFIG_FILE="${STARSHIP_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/starship.toml}"
+ZELLIJ_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/zellij"
+ZELLIJ_LAYOUTS_DIR="$ZELLIJ_CONFIG_DIR/layouts"
 GHOSTTY_CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/ghostty/config.ghostty"
 
 # Plugins
@@ -315,6 +317,52 @@ EOF
   log "Starship config written to $STARSHIP_CONFIG_FILE"
 }
 
+ensure_zellij_layout() {
+  mkdir -p "$ZELLIJ_LAYOUTS_DIR"
+
+  cat > "$ZELLIJ_LAYOUTS_DIR/ide.kdl" <<'EOF'
+layout {
+    default_tab_template {
+        pane size=1 borderless=true {
+            plugin location="zellij:tab-bar"
+        }
+        children
+        pane size=2 borderless=true {
+            plugin location="zellij:status-bar"
+        }
+    }
+
+    tab name="IDE" focus=true {
+        pane split_direction="vertical" {
+            pane name="main" focus=true
+            pane split_direction="horizontal" size="30%" {
+                pane name="top-right"
+                pane name="bottom-right"
+            }
+        }
+    }
+}
+EOF
+
+  log "Zellij IDE layout written to $ZELLIJ_LAYOUTS_DIR/ide.kdl"
+}
+
+ensure_zellij_alias() {
+  [[ -f "$ZSHRC" ]] || touch "$ZSHRC"
+
+  if grep -qF "alias zjide='zellij --layout ide'" "$ZSHRC"; then
+    log "Zellij IDE alias already present in ~/.zshrc."
+    return
+  fi
+
+  log "Adding zjide alias to ~/.zshrc..."
+  cat >> "$ZSHRC" <<'EOF'
+
+# Zellij IDE layout
+alias zjide='zellij --layout ide'
+EOF
+}
+
 upsert_ghostty_setting() {
   local key="$1"
   local value="$2"
@@ -394,6 +442,10 @@ main() {
   ensure_plugins_in_zshrc
   ensure_starship_in_zshrc
   ensure_starship_config
+  ensure_zellij_alias
+
+  log "Configuring Zellij..."
+  ensure_zellij_layout
 
   log "Configuring Ghostty..."
   ensure_ghostty_config
