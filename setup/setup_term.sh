@@ -334,8 +334,8 @@ layout {
 
     tab name="IDE" focus=true {
         pane split_direction="vertical" {
-            pane name="main" focus=true
-            pane split_direction="horizontal" size="30%" {
+            pane name="main" size="50%" focus=true
+            pane split_direction="horizontal" size="50%" {
                 pane name="top-right"
                 pane name="bottom-right"
             }
