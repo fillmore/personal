@@ -52,7 +52,14 @@ ensure_homebrew() {
   fi
 
   log "Homebrew not found. Installing Homebrew..."
-  NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  warn "Run this script as your normal user account, not with sudo."
+
+  if [[ "$(detect_os)" == "macos" ]]; then
+    log "Homebrew may prompt for your macOS administrator password..."
+    sudo -v || die "Administrator access is required to install Homebrew on macOS. Re-run this script from an admin account."
+  fi
+
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
   if [[ -x /opt/homebrew/bin/brew ]]; then
     eval "$(/opt/homebrew/bin/brew shellenv)"

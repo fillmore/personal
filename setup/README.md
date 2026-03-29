@@ -43,10 +43,10 @@ git clone https://github.com/fillmore/personal.git ~/personal && bash ~/personal
 ### One-liner from a raw hosted script
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/fillmore/personal/main/setup/setup_term.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/fillmore/personal/master/setup/setup_term.sh)"
 ```
 
-> If your default branch is not `main`, change the raw URL accordingly.
+> Run it as your normal user account, **not** with `sudo`. On a fresh macOS install, Homebrew may prompt for your administrator password during setup.
 
 ---
 
