@@ -302,7 +302,7 @@ ensure_starship_config() {
 
   # Force the prompt line-break on, even if the preset defines it differently.
   if grep -qE '^\[line_break\]' "$tmp"; then
-    perl -0pi -e 's/\[line_break\]\n(?:.*\n)*?(?=\n\[|\z)/[line_break]\ndisabled = false\n/sm' "$tmp"
+    perl -0pi -e 's/(\[line_break\]\n(?:[^\[]*?))disabled[ \t]*=[ \t]*(true|false)/${1}disabled = false/s' "$tmp"
   else
     cat >> "$tmp" <<'EOF'
 
