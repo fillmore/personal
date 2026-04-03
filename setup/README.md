@@ -13,6 +13,8 @@ It is designed for:
 The script sets up:
 
 - `zsh`, `git`, `curl`
+- `gh` (GitHub CLI)
+- `lsd` (`ls` replacement)
 - [`starship`](https://starship.rs/) prompt
 - [`zellij`](https://zellij.dev/)
 - Saved Zellij IDE layout: `zellij --layout ide` or `zjide`
@@ -57,11 +59,16 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/fillmore/personal/master
 Uses Homebrew:
 
 ```bash
-brew install zellij
+brew install gh lsd zellij
 ```
 
 ### Debian / Ubuntu
-The script tries the following in order:
+The script installs `gh` and `lsd` first:
+
+1. `apt` package if available
+2. otherwise, the official GitHub CLI apt repository
+
+For `zellij`, the script tries the following in order:
 
 1. `apt` package if available
 2. `snap install zellij --classic` if `snap` is installed
