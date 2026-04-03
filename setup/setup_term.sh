@@ -120,13 +120,25 @@ install_packages() {
       ensure_homebrew
       log "Installing packages via brew..."
       brew update
-      brew install zsh git curl starship zellij || true
+      brew install zsh git curl gh lsd starship zellij || true
       brew install --cask ghostty || warn "Ghostty install failed; try manually: brew install --cask ghostty"
       ;;
     debian)
       log "Installing packages via apt..."
       sudo apt-get update -y
-      sudo apt-get install -y zsh git curl
+      sudo apt-get install -y zsh git curl lsd
+      if apt-cache show gh >/dev/null 2>&1; then
+        sudo apt-get install -y gh
+      else
+        log "Installing GitHub CLI from the official apt repository..."
+        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+          | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+        sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+          | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
+        sudo apt-get update -y
+        sudo apt-get install -y gh
+      fi
       if apt-cache show zellij >/dev/null 2>&1; then
         sudo apt-get install -y zellij
       elif have snap; then
@@ -134,6 +146,8 @@ install_packages() {
         if ! sudo snap install zellij --classic; then
           warn "Snap install failed; falling back to the prebuilt zellij binary..."
           install_zellij_binary
+        elif [[ -d /snap/bin ]] && [[ ":$PATH:" != *":/snap/bin:"* ]]; then
+          export PATH="/snap/bin:$PATH"
         fi
       else
         warn "zellij is not available via apt on this system and snap is not installed; falling back to the prebuilt binary."
@@ -148,7 +162,7 @@ install_packages() {
       fi
       ;;
     *)
-      die "Unsupported OS. Please install zsh, git, curl, starship, and zellij manually and re-run."
+      die "Unsupported OS. Please install zsh, git, curl, gh, lsd, starship, and zellij manually and re-run."
       ;;
   esac
 }
@@ -208,6 +222,21 @@ EOF
 # User-local binaries
 export PATH="$HOME/.local/bin:$PATH"
 EOF
+  fi
+
+  if ! grep -qF '/snap/bin' "$ZSHRC"; then
+    log "Ensuring /snap/bin is on PATH in ~/.zshrc..."
+    cat >> "$ZSHRC" <<'EOF'
+
+# Snap binaries
+if [ -d /snap/bin ] && [[ ":$PATH:" != *":/snap/bin:"* ]]; then
+  export PATH="/snap/bin:$PATH"
+fi
+EOF
+  fi
+
+  if [[ -d /snap/bin ]] && [[ ":$PATH:" != *":/snap/bin:"* ]]; then
+    export PATH="/snap/bin:$PATH"
   fi
 
   # Ensure plugins line exists and includes ours.
@@ -456,4 +485,3 @@ main() {
 }
 
 main "$@"
-

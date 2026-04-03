@@ -13,6 +13,8 @@ It is designed for:
 The script sets up:
 
 - `zsh`, `git`, `curl`
+- `gh` (GitHub CLI)
+- `lsd` (`ls` replacement)
 - [`starship`](https://starship.rs/) prompt
 - [`zellij`](https://zellij.dev/)
 - Saved Zellij IDE layout: `zellij --layout ide` or `zjide`
@@ -57,17 +59,24 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/fillmore/personal/master
 Uses Homebrew:
 
 ```bash
-brew install zellij
+brew install gh lsd zellij
 ```
 
 ### Debian / Ubuntu
-The script tries the following in order:
+The script installs `gh` and `lsd` first:
+
+1. `apt` package if available
+2. otherwise, the official GitHub CLI apt repository
+
+For `zellij`, the script tries the following in order:
 
 1. `apt` package if available
 2. `snap install zellij --classic` if `snap` is installed
 3. fallback to the latest official **prebuilt binary** in `~/.local/bin/zellij`
 
 This avoids compiling Rust from source.
+
+When `snap` is used, the script also adds `/snap/bin` to `~/.zshrc` so `zellij` resolves correctly in future `zsh` sessions, including WSL.
 
 ---
 
@@ -86,6 +95,7 @@ It also ensures `~/.local/bin` is on your `PATH` when needed.
 
 - On **macOS**, the script will install `Git` via the Xcode Command Line Tools if needed, and then install `Homebrew` automatically if it is missing.
 - On **Linux**, the script expects `sudo` access.
+- On **WSL**, snap-installed commands often live under `/snap/bin`, so open a new shell or run `exec zsh` after setup to pick up the updated `PATH`.
 - At the end, the script can optionally set `zsh` as your default shell.
 - It is intended to be safe to re-run if you want to refresh the setup.
 
