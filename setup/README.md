@@ -69,6 +69,8 @@ The script tries the following in order:
 
 This avoids compiling Rust from source.
 
+When `snap` is used, the script also adds `/snap/bin` to `~/.zshrc` so `zellij` resolves correctly in future `zsh` sessions, including WSL.
+
 ---
 
 ## Files the script updates
@@ -86,6 +88,7 @@ It also ensures `~/.local/bin` is on your `PATH` when needed.
 
 - On **macOS**, the script will install `Git` via the Xcode Command Line Tools if needed, and then install `Homebrew` automatically if it is missing.
 - On **Linux**, the script expects `sudo` access.
+- On **WSL**, snap-installed commands often live under `/snap/bin`, so open a new shell or run `exec zsh` after setup to pick up the updated `PATH`.
 - At the end, the script can optionally set `zsh` as your default shell.
 - It is intended to be safe to re-run if you want to refresh the setup.
 
