@@ -118,7 +118,7 @@ zjide
 zellij --layout ide
 ```
 
-To start it with a named Zellij session:
+To start it with a named Zellij session (attach if it already exists, otherwise create it with the IDE layout):
 
 ```bash
 zjide work

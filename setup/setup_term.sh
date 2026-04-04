@@ -396,7 +396,11 @@ ensure_zellij_alias() {
 unalias zjide 2>/dev/null
 zjide() {
   if [ "$#" -gt 0 ]; then
-    zellij --session "$1" --layout ide
+    if zellij list-sessions 2>/dev/null | awk '{print $1}' | grep -Fqx -- "$1"; then
+      zellij attach "$1"
+    else
+      zellij --session "$1" --new-session-with-layout ide
+    fi
   else
     zellij --layout ide
   fi
