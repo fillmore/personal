@@ -12,7 +12,8 @@ It is designed for:
 
 The script sets up:
 
-- `zsh`, `git`, `curl`
+- `git`, `curl`
+- `zsh` configuration via `oh-my-zsh` and plugins *(macOS uses the built-in `zsh`)*
 - `gh` (GitHub CLI)
 - `lsd` (`ls` replacement)
 - [`starship`](https://starship.rs/) prompt
@@ -93,10 +94,10 @@ It also ensures `~/.local/bin` is on your `PATH` when needed.
 
 ## Notes
 
-- On **macOS**, the script will install `Git` via the Xcode Command Line Tools if needed, and then install `Homebrew` automatically if it is missing.
+- On **macOS**, the script will install `Git` via the Xcode Command Line Tools if needed, install `Homebrew` automatically if it is missing, and use the built-in `zsh` instead of installing it.
 - On **Linux**, the script expects `sudo` access.
 - On **WSL**, snap-installed commands often live under `/snap/bin`, so open a new shell or run `exec zsh` after setup to pick up the updated `PATH`.
-- At the end, the script can optionally set `zsh` as your default shell.
+- On Linux, the script can optionally set `zsh` as your default shell. On macOS, it skips that prompt.
 - It is intended to be safe to re-run if you want to refresh the setup.
 
 ---

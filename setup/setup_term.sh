@@ -120,7 +120,7 @@ install_packages() {
       ensure_homebrew
       log "Installing packages via brew..."
       brew update
-      brew install zsh git curl gh lsd starship zellij || true
+      brew install git curl gh lsd starship zellij || true
       brew install --cask ghostty || warn "Ghostty install failed; try manually: brew install --cask ghostty"
       ;;
     debian)
@@ -431,6 +431,12 @@ ensure_ghostty_config() {
 
 offer_set_default_shell() {
   local zsh_path
+
+  if [[ "$(detect_os)" == "macos" ]]; then
+    log "Skipping default shell change on macOS."
+    return
+  fi
+
   zsh_path="$(command -v zsh || true)"
   [[ -n "$zsh_path" ]] || return
 
