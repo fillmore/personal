@@ -379,16 +379,32 @@ EOF
 ensure_zellij_alias() {
   [[ -f "$ZSHRC" ]] || touch "$ZSHRC"
 
-  if grep -qF "alias zjide='zellij --layout ide'" "$ZSHRC"; then
-    log "Zellij IDE alias already present in ~/.zshrc."
+  if grep -qF 'zjide() {' "$ZSHRC"; then
+    log "Zellij IDE helper already present in ~/.zshrc."
     return
   fi
 
-  log "Adding zjide alias to ~/.zshrc..."
+  if grep -qF "alias zjide='zellij --layout ide'" "$ZSHRC"; then
+    log "Upgrading zjide alias to a session-aware helper in ~/.zshrc..."
+    perl -0pi -e "s@\n# Zellij IDE layout\nalias zjide='zellij --layout ide'\n@@g" "$ZSHRC"
+  fi
+
+  log "Adding zjide helper to ~/.zshrc..."
   cat >> "$ZSHRC" <<'EOF'
 
-# Zellij IDE layout
-alias zjide='zellij --layout ide'
+# Zellij IDE layout helper
+unalias zjide 2>/dev/null
+zjide() {
+  if [ "$#" -gt 0 ]; then
+    if zellij list-sessions 2>/dev/null | awk '{print $1}' | grep -Fqx -- "$1"; then
+      zellij attach "$1"
+    else
+      zellij --session "$1" --new-session-with-layout ide
+    fi
+  else
+    zellij --layout ide
+  fi
+}
 EOF
 }
 

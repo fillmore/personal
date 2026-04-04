@@ -18,7 +18,7 @@ The script sets up:
 - `lsd` (`ls` replacement)
 - [`starship`](https://starship.rs/) prompt
 - [`zellij`](https://zellij.dev/)
-- Saved Zellij IDE layout: `zellij --layout ide` or `zjide`
+- Saved Zellij IDE layout: `zellij --layout ide`, `zjide`, or `zjide <session-name>`
 - [`oh-my-zsh`](https://ohmyz.sh/)
 - Zsh plugins:
   - `zsh-autosuggestions`
@@ -116,4 +116,10 @@ To launch the saved split layout shown in the screenshot style:
 zjide
 # or
 zellij --layout ide
+```
+
+To start it with a named Zellij session (attach if it already exists, otherwise create it with the IDE layout):
+
+```bash
+zjide work
 ```
