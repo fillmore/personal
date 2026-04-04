@@ -447,13 +447,11 @@ ensure_ghostty_config() {
 
 offer_set_default_shell() {
   local zsh_path
-
-  if [[ "$(detect_os)" == "macos" ]]; then
-    log "Skipping default shell change on macOS."
-    return
+  if [[ "$(detect_os)" == "macos" && -x /bin/zsh ]]; then
+    zsh_path="/bin/zsh"
+  else
+    zsh_path="$(command -v zsh || true)"
   fi
-
-  zsh_path="$(command -v zsh || true)"
   [[ -n "$zsh_path" ]] || return
 
   if [[ "${SHELL:-}" == "$zsh_path" ]]; then
