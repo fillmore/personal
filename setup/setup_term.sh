@@ -111,7 +111,7 @@ install_zellij_binary() {
 }
 
 install_lazygit_binary() {
-  local os arch asset version url tmpdir bindir
+  local os arch asset version url tmpdir bindir release_metadata
   os="$(detect_os)"
   arch="$(uname -m)"
 
@@ -134,11 +134,8 @@ install_lazygit_binary() {
       ;;
   esac
 
-  version="$(
-    curl -fsSL https://api.github.com/repos/jesseduffield/lazygit/releases/latest \
-      | grep -m1 '"tag_name"' \
-      | sed -E 's/.*"v?([^"]+)".*/\1/'
-  )"
+  release_metadata="$(curl -fsSL https://api.github.com/repos/jesseduffield/lazygit/releases/latest)"
+  version="$(printf '%s\n' "$release_metadata" | sed -nE 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v?([^"]+)".*/\1/p')"
 
   [[ -n "$version" ]] || die "Unable to determine the latest lazygit version from GitHub."
 
