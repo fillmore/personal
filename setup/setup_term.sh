@@ -14,6 +14,7 @@ GHOSTTY_CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/ghostty/config.ghostty"
 AUTOSUGGEST_REPO="https://github.com/zsh-users/zsh-autosuggestions.git"
 SYNTAX_HL_REPO="https://github.com/zsh-users/zsh-syntax-highlighting.git"
 AUTOCOMPLETE_REPO="https://github.com/marlonrichert/zsh-autocomplete.git"
+LAZYGIT_INSTALL_DOC_URL="https://github.com/jesseduffield/lazygit#debian-and-ubuntu"
 
 AUTOSUGGEST_DIR="$PLUGINS_DIR/zsh-autosuggestions"
 SYNTAX_HL_DIR="$PLUGINS_DIR/zsh-syntax-highlighting"
@@ -198,7 +199,7 @@ install_packages() {
       if apt-cache show lazygit >/dev/null 2>&1; then
         sudo apt-get install -y lazygit
       else
-        warn "lazygit not available via apt on this system; installing from the latest prebuilt release binary..."
+        warn "lazygit not available via apt on this system; following the official lazygit Debian/Ubuntu install path from $LAZYGIT_INSTALL_DOC_URL"
         install_lazygit_binary
       fi
       ;;

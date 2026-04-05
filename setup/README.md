@@ -82,6 +82,8 @@ For `lazygit`, the script tries:
 1. `apt install lazygit`
 2. fallback to the latest official **prebuilt binary** in `~/.local/bin/lazygit`
 
+For **Ubuntu 24.04** and similar releases where the distro package may be missing or stale, this fallback follows the official [`jesseduffield/lazygit` Debian and Ubuntu instructions](https://github.com/jesseduffield/lazygit#debian-and-ubuntu), adapted to install into `~/.local/bin`.
+
 ---
 
 ## Files the script updates
