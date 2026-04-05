@@ -142,13 +142,12 @@ install_lazygit_binary() {
 
   url="https://github.com/jesseduffield/lazygit/releases/latest/download/lazygit_${version}_${asset}"
   tmpdir="$(mktemp -d)"
-  bindir="$HOME/.local/bin"
+  bindir="/usr/local/bin"
 
-  log "Installing lazygit from the latest prebuilt release binary..."
-  mkdir -p "$bindir"
+  log "Installing lazygit from the latest prebuilt release binary into $bindir..."
   curl -fL "$url" -o "$tmpdir/lazygit.tar.gz"
   tar -xzf "$tmpdir/lazygit.tar.gz" -C "$tmpdir" lazygit
-  install -m 755 "$tmpdir/lazygit" "$bindir/lazygit"
+  sudo install -m 755 -D "$tmpdir/lazygit" "$bindir/lazygit"
   rm -rf "$tmpdir"
 
   log "lazygit installed to $bindir/lazygit"
@@ -199,7 +198,7 @@ install_packages() {
       if apt-cache show lazygit >/dev/null 2>&1; then
         sudo apt-get install -y lazygit
       else
-        warn "lazygit not available via apt on this system; following the official lazygit Debian/Ubuntu install path from $LAZYGIT_INSTALL_DOC_URL"
+        warn "lazygit not available via apt on this system; following the official lazygit Debian/Ubuntu install path from $LAZYGIT_INSTALL_DOC_URL into /usr/local/bin"
         install_lazygit_binary
       fi
       ;;
