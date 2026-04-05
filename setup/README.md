@@ -93,7 +93,7 @@ For **Ubuntu 24.04** and similar releases where the distro package may be missin
 - `~/.config/zellij/layouts/ide.kdl`
 - `~/.config/ghostty/config.ghostty` *(macOS only)*
 
-It also ensures `~/.local/bin` is on your `PATH` when needed.
+On macOS, it also ensures `~/.local/bin` is on your `PATH` when needed.
 
 ---
 
