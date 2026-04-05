@@ -187,16 +187,8 @@ install_packages() {
       fi
       if apt-cache show zellij >/dev/null 2>&1; then
         sudo apt-get install -y zellij
-      elif have snap; then
-        log "Installing zellij via snap..."
-        if ! sudo snap install zellij --classic; then
-          warn "Snap install failed; falling back to the prebuilt zellij binary..."
-          install_zellij_binary
-        elif [[ -d /snap/bin ]] && [[ ":$PATH:" != *":/snap/bin:"* ]]; then
-          export PATH="/snap/bin:$PATH"
-        fi
       else
-        warn "zellij is not available via apt on this system and snap is not installed; falling back to the prebuilt binary."
+        warn "zellij is not available via apt on this system; falling back to the prebuilt binary."
         install_zellij_binary
       fi
       # Prefer distro package if available; fall back to official installer
@@ -274,21 +266,6 @@ EOF
 # User-local binaries
 export PATH="$HOME/.local/bin:$PATH"
 EOF
-  fi
-
-  if ! grep -qF '/snap/bin' "$ZSHRC"; then
-    log "Ensuring /snap/bin is on PATH in ~/.zshrc..."
-    cat >> "$ZSHRC" <<'EOF'
-
-# Snap binaries
-if [ -d /snap/bin ] && [[ ":$PATH:" != *":/snap/bin:"* ]]; then
-  export PATH="/snap/bin:$PATH"
-fi
-EOF
-  fi
-
-  if [[ -d /snap/bin ]] && [[ ":$PATH:" != *":/snap/bin:"* ]]; then
-    export PATH="/snap/bin:$PATH"
   fi
 
   # Ensure plugins line exists and includes ours.
