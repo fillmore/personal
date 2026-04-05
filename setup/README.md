@@ -15,6 +15,7 @@ The script sets up:
 - `git`, `curl`
 - `zsh` configuration via `oh-my-zsh` and plugins *(macOS uses the built-in `zsh`)*
 - `gh` (GitHub CLI)
+- `lazygit`
 - `lsd` (`ls` replacement)
 - [`starship`](https://starship.rs/) prompt
 - [`zellij`](https://zellij.dev/)
@@ -76,6 +77,11 @@ For `zellij`, the script tries the following in order:
 3. fallback to the latest official **prebuilt binary** in `~/.local/bin/zellij`
 
 This avoids compiling Rust from source.
+
+For `lazygit`, the script tries:
+
+1. `apt install lazygit`
+2. fallback to the latest official **prebuilt binary** in `~/.local/bin/lazygit`
 
 When `snap` is used, the script also adds `/snap/bin` to `~/.zshrc` so `zellij` resolves correctly in future `zsh` sessions, including WSL.
 
