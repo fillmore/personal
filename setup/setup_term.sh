@@ -152,6 +152,39 @@ install_lazygit_binary() {
   log "lazygit installed to $bindir/lazygit"
 }
 
+install_jd_binary() {
+  local os arch asset url tmpdir bindir
+  os="$(detect_os)"
+  arch="$(uname -m)"
+
+  case "$os:$arch" in
+    debian:x86_64|debian:amd64)
+      asset="jd-amd64-linux"
+      ;;
+    debian:aarch64|debian:arm64)
+      asset="jd-arm64-linux"
+      ;;
+    debian:riscv64)
+      asset="jd-riscv64-linux"
+      ;;
+    *)
+      warn "No prebuilt jd binary mapping is available for $os/$arch in this script."
+      return 1
+      ;;
+  esac
+
+  url="https://github.com/josephburnett/jd/releases/latest/download/${asset}"
+  tmpdir="$(mktemp -d)"
+  bindir="/usr/local/bin"
+
+  log "Installing jd from the latest prebuilt release binary into $bindir..."
+  curl -fL "$url" -o "$tmpdir/jd"
+  sudo install -m 755 -D "$tmpdir/jd" "$bindir/jd"
+  rm -rf "$tmpdir"
+
+  log "jd installed to $bindir/jd"
+}
+
 install_packages() {
   local os
   os="$(detect_os)"
@@ -162,13 +195,13 @@ install_packages() {
       ensure_homebrew
       log "Installing packages via brew..."
       brew update
-      brew install git curl gh lsd lazygit starship zellij || true
+      brew install git curl fzf gh jd lsd lazygit starship zellij || true
       brew install --cask ghostty || warn "Ghostty install failed; try manually: brew install --cask ghostty"
       ;;
     debian)
       log "Installing packages via apt..."
       sudo apt-get update -y
-      sudo apt-get install -y zsh git curl lsd
+      sudo apt-get install -y zsh git curl fzf lsd
       if apt-cache show gh >/dev/null 2>&1; then
         sudo apt-get install -y gh
       else
@@ -200,9 +233,15 @@ install_packages() {
         warn "lazygit not available via apt on this system; following the official lazygit Debian/Ubuntu install path from $LAZYGIT_INSTALL_DOC_URL into /usr/local/bin"
         install_lazygit_binary
       fi
+      if apt-cache show jd >/dev/null 2>&1 && sudo apt-get install -y jd; then
+        true
+      else
+        warn "jd is not available via apt on this system; installing from the latest official release binary..."
+        install_jd_binary
+      fi
       ;;
     *)
-      die "Unsupported OS. Please install zsh, git, curl, gh, lsd, lazygit, starship, and zellij manually and re-run."
+      die "Unsupported OS. Please install zsh, git, curl, fzf, gh, jd, lsd, lazygit, starship, and zellij manually and re-run."
       ;;
   esac
 }

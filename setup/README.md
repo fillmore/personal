@@ -13,8 +13,10 @@ It is designed for:
 The script sets up:
 
 - `git`, `curl`
+- `fzf`
 - `zsh` configuration via `oh-my-zsh` and plugins *(macOS uses the built-in `zsh`)*
 - `gh` (GitHub CLI)
+- `jd`
 - `lazygit`
 - `lsd` (`ls` replacement)
 - [`starship`](https://starship.rs/) prompt
@@ -61,11 +63,11 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/fillmore/personal/master
 Uses Homebrew:
 
 ```bash
-brew install gh lsd zellij
+brew install gh jd fzf lsd lazygit starship zellij
 ```
 
 ### Debian / Ubuntu
-The script installs `gh` and `lsd` first:
+The script installs the baseline CLI tools via `apt`, including `fzf`, and then adds `gh` from the distro or its official apt repository when needed:
 
 1. `apt` package if available
 2. otherwise, the official GitHub CLI apt repository
@@ -83,6 +85,20 @@ For `lazygit`, the script tries:
 2. fallback to the latest official **prebuilt binary** in `/usr/local/bin/lazygit`
 
 For **Ubuntu 24.04** and similar releases where the distro package may be missing or stale, this fallback follows the official [`jesseduffield/lazygit` Debian and Ubuntu instructions](https://github.com/jesseduffield/lazygit#debian-and-ubuntu) and installs the binary into `/usr/local/bin`.
+
+For `jd`, the script tries:
+
+1. `apt install jd`
+2. fallback to the latest official **prebuilt binary** in `/usr/local/bin/jd`
+
+The equivalent manual install on Linux is:
+
+```bash
+ARCH=$(uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
+curl -fL "https://github.com/josephburnett/jd/releases/latest/download/jd-${ARCH}-linux" -o jd
+sudo install -m 755 jd /usr/local/bin/jd
+rm -f jd
+```
 
 ---
 
