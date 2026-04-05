@@ -191,8 +191,8 @@ install_packages() {
       if sudo apt-get install -y starship; then
         true
       else
-        warn "starship not available via apt on this system; installing via official script into /usr/local/bin..."
-        curl -fsSL https://starship.rs/install.sh | sh -s -- -y -b /usr/local/bin
+        warn "starship not available via apt on this system; installing via official script..."
+        curl -fsSL https://starship.rs/install.sh | sh -s -- -y
       fi
       if apt-cache show lazygit >/dev/null 2>&1; then
         sudo apt-get install -y lazygit
