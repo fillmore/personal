@@ -15,6 +15,7 @@ The script sets up:
 - `git`, `curl`
 - `zsh` configuration via `oh-my-zsh` and plugins *(macOS uses the built-in `zsh`)*
 - `gh` (GitHub CLI)
+- `lazygit`
 - `lsd` (`ls` replacement)
 - [`starship`](https://starship.rs/) prompt
 - [`zellij`](https://zellij.dev/)
@@ -72,12 +73,14 @@ The script installs `gh` and `lsd` first:
 For `zellij`, the script tries the following in order:
 
 1. `apt` package if available
-2. `snap install zellij --classic` if `snap` is installed
-3. fallback to the latest official **prebuilt binary** in `~/.local/bin/zellij`
+2. fallback to the latest official **prebuilt binary** in `~/.local/bin/zellij`
 
 This avoids compiling Rust from source.
 
-When `snap` is used, the script also adds `/snap/bin` to `~/.zshrc` so `zellij` resolves correctly in future `zsh` sessions, including WSL.
+For `lazygit`, the script tries:
+
+1. `apt install lazygit`
+2. fallback to the latest official **prebuilt binary** in `~/.local/bin/lazygit`
 
 ---
 
@@ -96,7 +99,7 @@ It also ensures `~/.local/bin` is on your `PATH` when needed.
 
 - On **macOS**, the script will install `Git` via the Xcode Command Line Tools if needed, install `Homebrew` automatically if it is missing, and use the built-in `zsh` instead of installing it.
 - On **Linux**, the script expects `sudo` access.
-- On **WSL**, snap-installed commands often live under `/snap/bin`, so open a new shell or run `exec zsh` after setup to pick up the updated `PATH`.
+- On **WSL**, the script follows the same Debian flow and falls back to prebuilt binaries in `~/.local/bin` when distro packages are unavailable.
 - On Linux, the script can optionally set `zsh` as your default shell. On macOS, it skips that prompt.
 - It is intended to be safe to re-run if you want to refresh the setup.
 

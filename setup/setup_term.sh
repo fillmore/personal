@@ -110,6 +110,52 @@ install_zellij_binary() {
   log "zellij installed to $bindir/zellij"
 }
 
+install_lazygit_binary() {
+  local os arch asset version url tmpdir bindir
+  os="$(detect_os)"
+  arch="$(uname -m)"
+
+  case "$os:$arch" in
+    debian:x86_64|debian:amd64)
+      asset="Linux_x86_64.tar.gz"
+      ;;
+    debian:aarch64|debian:arm64)
+      asset="Linux_arm64.tar.gz"
+      ;;
+    macos:x86_64)
+      asset="Darwin_x86_64.tar.gz"
+      ;;
+    macos:arm64|macos:aarch64)
+      asset="Darwin_arm64.tar.gz"
+      ;;
+    *)
+      warn "No prebuilt lazygit binary mapping is available for $os/$arch in this script."
+      return 1
+      ;;
+  esac
+
+  version="$(
+    curl -fsSL https://api.github.com/repos/jesseduffield/lazygit/releases/latest \
+      | grep -m1 '"tag_name"' \
+      | sed -E 's/.*"v?([^"]+)".*/\1/'
+  )"
+
+  [[ -n "$version" ]] || die "Unable to determine the latest lazygit version from GitHub."
+
+  url="https://github.com/jesseduffield/lazygit/releases/latest/download/lazygit_${version}_${asset}"
+  tmpdir="$(mktemp -d)"
+  bindir="$HOME/.local/bin"
+
+  log "Installing lazygit from the latest prebuilt release binary..."
+  mkdir -p "$bindir"
+  curl -fL "$url" -o "$tmpdir/lazygit.tar.gz"
+  tar -xzf "$tmpdir/lazygit.tar.gz" -C "$tmpdir" lazygit
+  install -m 755 "$tmpdir/lazygit" "$bindir/lazygit"
+  rm -rf "$tmpdir"
+
+  log "lazygit installed to $bindir/lazygit"
+}
+
 install_packages() {
   local os
   os="$(detect_os)"
@@ -120,7 +166,7 @@ install_packages() {
       ensure_homebrew
       log "Installing packages via brew..."
       brew update
-      brew install git curl gh lsd starship zellij || true
+      brew install git curl gh lsd lazygit starship zellij || true
       brew install --cask ghostty || warn "Ghostty install failed; try manually: brew install --cask ghostty"
       ;;
     debian)
@@ -141,16 +187,8 @@ install_packages() {
       fi
       if apt-cache show zellij >/dev/null 2>&1; then
         sudo apt-get install -y zellij
-      elif have snap; then
-        log "Installing zellij via snap..."
-        if ! sudo snap install zellij --classic; then
-          warn "Snap install failed; falling back to the prebuilt zellij binary..."
-          install_zellij_binary
-        elif [[ -d /snap/bin ]] && [[ ":$PATH:" != *":/snap/bin:"* ]]; then
-          export PATH="/snap/bin:$PATH"
-        fi
       else
-        warn "zellij is not available via apt on this system and snap is not installed; falling back to the prebuilt binary."
+        warn "zellij is not available via apt on this system; falling back to the prebuilt binary."
         install_zellij_binary
       fi
       # Prefer distro package if available; fall back to official installer
@@ -160,9 +198,15 @@ install_packages() {
         warn "starship not available via apt on this system; installing via official script..."
         curl -fsSL https://starship.rs/install.sh | sh -s -- -y
       fi
+      if apt-cache show lazygit >/dev/null 2>&1; then
+        sudo apt-get install -y lazygit
+      else
+        warn "lazygit not available via apt on this system; installing from the latest prebuilt release binary..."
+        install_lazygit_binary
+      fi
       ;;
     *)
-      die "Unsupported OS. Please install zsh, git, curl, gh, lsd, starship, and zellij manually and re-run."
+      die "Unsupported OS. Please install zsh, git, curl, gh, lsd, lazygit, starship, and zellij manually and re-run."
       ;;
   esac
 }
@@ -222,21 +266,6 @@ EOF
 # User-local binaries
 export PATH="$HOME/.local/bin:$PATH"
 EOF
-  fi
-
-  if ! grep -qF '/snap/bin' "$ZSHRC"; then
-    log "Ensuring /snap/bin is on PATH in ~/.zshrc..."
-    cat >> "$ZSHRC" <<'EOF'
-
-# Snap binaries
-if [ -d /snap/bin ] && [[ ":$PATH:" != *":/snap/bin:"* ]]; then
-  export PATH="/snap/bin:$PATH"
-fi
-EOF
-  fi
-
-  if [[ -d /snap/bin ]] && [[ ":$PATH:" != *":/snap/bin:"* ]]; then
-    export PATH="/snap/bin:$PATH"
   fi
 
   # Ensure plugins line exists and includes ours.
@@ -447,13 +476,11 @@ ensure_ghostty_config() {
 
 offer_set_default_shell() {
   local zsh_path
-
-  if [[ "$(detect_os)" == "macos" ]]; then
-    log "Skipping default shell change on macOS."
-    return
+  if [[ "$(detect_os)" == "macos" && -x /bin/zsh ]]; then
+    zsh_path="/bin/zsh"
+  else
+    zsh_path="$(command -v zsh || true)"
   fi
-
-  zsh_path="$(command -v zsh || true)"
   [[ -n "$zsh_path" ]] || return
 
   if [[ "${SHELL:-}" == "$zsh_path" ]]; then
