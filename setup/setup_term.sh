@@ -14,6 +14,7 @@ GHOSTTY_CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/ghostty/config.ghostty"
 AUTOSUGGEST_REPO="https://github.com/zsh-users/zsh-autosuggestions.git"
 SYNTAX_HL_REPO="https://github.com/zsh-users/zsh-syntax-highlighting.git"
 AUTOCOMPLETE_REPO="https://github.com/marlonrichert/zsh-autocomplete.git"
+LAZYGIT_INSTALL_DOC_URL="https://github.com/jesseduffield/lazygit#debian-and-ubuntu"
 
 AUTOSUGGEST_DIR="$PLUGINS_DIR/zsh-autosuggestions"
 SYNTAX_HL_DIR="$PLUGINS_DIR/zsh-syntax-highlighting"
@@ -98,20 +99,31 @@ install_zellij_binary() {
 
   url="https://github.com/zellij-org/zellij/releases/latest/download/zellij-${target}.tar.gz"
   tmpdir="$(mktemp -d)"
-  bindir="$HOME/.local/bin"
+  case "$os" in
+    debian)
+      bindir="/usr/local/bin"
+      ;;
+    *)
+      bindir="$HOME/.local/bin"
+      ;;
+  esac
 
-  log "Installing zellij from the latest prebuilt release binary..."
-  mkdir -p "$bindir"
+  log "Installing zellij from the latest prebuilt release binary into $bindir..."
   curl -fL "$url" -o "$tmpdir/zellij.tar.gz"
   tar -xzf "$tmpdir/zellij.tar.gz" -C "$tmpdir"
-  install -m 755 "$tmpdir/zellij" "$bindir/zellij"
+  if [[ "$bindir" == "/usr/local/bin" ]]; then
+    sudo install -m 755 -D "$tmpdir/zellij" "$bindir/zellij"
+  else
+    mkdir -p "$bindir"
+    install -m 755 "$tmpdir/zellij" "$bindir/zellij"
+  fi
   rm -rf "$tmpdir"
 
   log "zellij installed to $bindir/zellij"
 }
 
 install_lazygit_binary() {
-  local os arch asset version url tmpdir bindir
+  local os arch asset version url tmpdir bindir release_metadata
   os="$(detect_os)"
   arch="$(uname -m)"
 
@@ -134,23 +146,19 @@ install_lazygit_binary() {
       ;;
   esac
 
-  version="$(
-    curl -fsSL https://api.github.com/repos/jesseduffield/lazygit/releases/latest \
-      | grep -m1 '"tag_name"' \
-      | sed -E 's/.*"v?([^"]+)".*/\1/'
-  )"
+  release_metadata="$(curl -fsSL https://api.github.com/repos/jesseduffield/lazygit/releases/latest)"
+  version="$(printf '%s\n' "$release_metadata" | sed -nE 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v?([^"]+)".*/\1/p')"
 
   [[ -n "$version" ]] || die "Unable to determine the latest lazygit version from GitHub."
 
   url="https://github.com/jesseduffield/lazygit/releases/latest/download/lazygit_${version}_${asset}"
   tmpdir="$(mktemp -d)"
-  bindir="$HOME/.local/bin"
+  bindir="/usr/local/bin"
 
-  log "Installing lazygit from the latest prebuilt release binary..."
-  mkdir -p "$bindir"
+  log "Installing lazygit from the latest prebuilt release binary into $bindir..."
   curl -fL "$url" -o "$tmpdir/lazygit.tar.gz"
   tar -xzf "$tmpdir/lazygit.tar.gz" -C "$tmpdir" lazygit
-  install -m 755 "$tmpdir/lazygit" "$bindir/lazygit"
+  sudo install -m 755 -D "$tmpdir/lazygit" "$bindir/lazygit"
   rm -rf "$tmpdir"
 
   log "lazygit installed to $bindir/lazygit"
@@ -201,7 +209,7 @@ install_packages() {
       if apt-cache show lazygit >/dev/null 2>&1; then
         sudo apt-get install -y lazygit
       else
-        warn "lazygit not available via apt on this system; installing from the latest prebuilt release binary..."
+        warn "lazygit not available via apt on this system; following the official lazygit Debian/Ubuntu install path from $LAZYGIT_INSTALL_DOC_URL into /usr/local/bin"
         install_lazygit_binary
       fi
       ;;
