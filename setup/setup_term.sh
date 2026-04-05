@@ -26,6 +26,18 @@ die() { printf "\n\033[1;31m==>\033[0m %s\n" "$*"; exit 1; }
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+is_wsl() {
+  grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null || grep -qi microsoft /proc/version 2>/dev/null
+}
+
+binary_install_dir() {
+  if is_wsl; then
+    echo "/usr/local/bin"
+  else
+    echo "$HOME/.local/bin"
+  fi
+}
+
 detect_os() {
   if [[ "$OSTYPE" == "darwin"* ]]; then
     echo "macos"
@@ -99,14 +111,7 @@ install_zellij_binary() {
 
   url="https://github.com/zellij-org/zellij/releases/latest/download/zellij-${target}.tar.gz"
   tmpdir="$(mktemp -d)"
-  case "$os" in
-    debian)
-      bindir="/usr/local/bin"
-      ;;
-    *)
-      bindir="$HOME/.local/bin"
-      ;;
-  esac
+  bindir="$(binary_install_dir)"
 
   log "Installing zellij from the latest prebuilt release binary into $bindir..."
   curl -fL "$url" -o "$tmpdir/zellij.tar.gz"
@@ -153,7 +158,7 @@ install_lazygit_binary() {
 
   url="https://github.com/jesseduffield/lazygit/releases/latest/download/lazygit_${version}_${asset}"
   tmpdir="$(mktemp -d)"
-  bindir="/usr/local/bin"
+  bindir="$(binary_install_dir)"
 
   log "Installing lazygit from the latest prebuilt release binary into $bindir..."
   curl -fL "$url" -o "$tmpdir/lazygit.tar.gz"
@@ -203,13 +208,18 @@ install_packages() {
       if sudo apt-get install -y starship; then
         true
       else
-        warn "starship not available via apt on this system; installing via official script..."
-        curl -fsSL https://starship.rs/install.sh | sh -s -- -y
+        if is_wsl; then
+          warn "starship not available via apt on this system; installing via official script into /usr/local/bin..."
+          curl -fsSL https://starship.rs/install.sh | sh -s -- -y -b /usr/local/bin
+        else
+          warn "starship not available via apt on this system; installing via official script..."
+          curl -fsSL https://starship.rs/install.sh | sh -s -- -y
+        fi
       fi
       if apt-cache show lazygit >/dev/null 2>&1; then
         sudo apt-get install -y lazygit
       else
-        warn "lazygit not available via apt on this system; following the official lazygit Debian/Ubuntu install path from $LAZYGIT_INSTALL_DOC_URL into /usr/local/bin"
+        warn "lazygit not available via apt on this system; following the official lazygit Debian/Ubuntu install path from $LAZYGIT_INSTALL_DOC_URL into $(binary_install_dir)"
         install_lazygit_binary
       fi
       ;;

@@ -73,16 +73,16 @@ The script installs `gh` and `lsd` first:
 For `zellij`, the script tries the following in order:
 
 1. `apt` package if available
-2. fallback to the latest official **prebuilt binary** in `/usr/local/bin/zellij`
+2. fallback to the latest official **prebuilt binary** in `/usr/local/bin/zellij` on WSL, or `~/.local/bin/zellij` elsewhere
 
 This avoids compiling Rust from source.
 
 For `lazygit`, the script tries:
 
 1. `apt install lazygit`
-2. fallback to the latest official **prebuilt binary** in `/usr/local/bin/lazygit`
+2. fallback to the latest official **prebuilt binary** in `/usr/local/bin/lazygit` on WSL, or `~/.local/bin/lazygit` elsewhere
 
-For **Ubuntu 24.04** and similar releases where the distro package may be missing or stale, this fallback follows the official [`jesseduffield/lazygit` Debian and Ubuntu instructions](https://github.com/jesseduffield/lazygit#debian-and-ubuntu), installing the binary into `/usr/local/bin`.
+For **Ubuntu 24.04** and similar releases where the distro package may be missing or stale, this fallback follows the official [`jesseduffield/lazygit` Debian and Ubuntu instructions](https://github.com/jesseduffield/lazygit#debian-and-ubuntu). On WSL, the manual fallback installs use `/usr/local/bin`.
 
 ---
 
@@ -101,7 +101,7 @@ It also ensures `~/.local/bin` is on your `PATH` when needed.
 
 - On **macOS**, the script will install `Git` via the Xcode Command Line Tools if needed, install `Homebrew` automatically if it is missing, and use the built-in `zsh` instead of installing it.
 - On **Linux**, the script expects `sudo` access.
-- On **WSL**, the script follows the same Debian flow; both `zellij` and `lazygit` fall back to `/usr/local/bin` when the distro package is unavailable.
+- On **WSL**, the script follows the same Debian flow and keeps fallback-installed tools in `/usr/local/bin` for a system-wide path.
 - On Linux, the script can optionally set `zsh` as your default shell. On macOS, it skips that prompt.
 - It is intended to be safe to re-run if you want to refresh the setup.
 
