@@ -26,14 +26,6 @@ die() { printf "\n\033[1;31m==>\033[0m %s\n" "$*"; exit 1; }
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
-binary_install_dir() {
-  if [[ "$(detect_os)" == "macos" ]]; then
-    echo "$HOME/.local/bin"
-  else
-    echo "/usr/local/bin"
-  fi
-}
-
 detect_os() {
   if [[ "$OSTYPE" == "darwin"* ]]; then
     echo "macos"
@@ -107,17 +99,12 @@ install_zellij_binary() {
 
   url="https://github.com/zellij-org/zellij/releases/latest/download/zellij-${target}.tar.gz"
   tmpdir="$(mktemp -d)"
-  bindir="$(binary_install_dir)"
+  bindir="/usr/local/bin"
 
   log "Installing zellij from the latest prebuilt release binary into $bindir..."
   curl -fL "$url" -o "$tmpdir/zellij.tar.gz"
   tar -xzf "$tmpdir/zellij.tar.gz" -C "$tmpdir"
-  if [[ "$bindir" == "/usr/local/bin" ]]; then
-    sudo install -m 755 -D "$tmpdir/zellij" "$bindir/zellij"
-  else
-    mkdir -p "$bindir"
-    install -m 755 "$tmpdir/zellij" "$bindir/zellij"
-  fi
+  sudo install -m 755 -D "$tmpdir/zellij" "$bindir/zellij"
   rm -rf "$tmpdir"
 
   log "zellij installed to $bindir/zellij"
@@ -154,17 +141,12 @@ install_lazygit_binary() {
 
   url="https://github.com/jesseduffield/lazygit/releases/latest/download/lazygit_${version}_${asset}"
   tmpdir="$(mktemp -d)"
-  bindir="$(binary_install_dir)"
+  bindir="/usr/local/bin"
 
   log "Installing lazygit from the latest prebuilt release binary into $bindir..."
   curl -fL "$url" -o "$tmpdir/lazygit.tar.gz"
   tar -xzf "$tmpdir/lazygit.tar.gz" -C "$tmpdir" lazygit
-  if [[ "$bindir" == "/usr/local/bin" ]]; then
-    sudo install -m 755 -D "$tmpdir/lazygit" "$bindir/lazygit"
-  else
-    mkdir -p "$bindir"
-    install -m 755 "$tmpdir/lazygit" "$bindir/lazygit"
-  fi
+  sudo install -m 755 -D "$tmpdir/lazygit" "$bindir/lazygit"
   rm -rf "$tmpdir"
 
   log "lazygit installed to $bindir/lazygit"
@@ -215,7 +197,7 @@ install_packages() {
       if apt-cache show lazygit >/dev/null 2>&1; then
         sudo apt-get install -y lazygit
       else
-        warn "lazygit not available via apt on this system; following the official lazygit Debian/Ubuntu install path from $LAZYGIT_INSTALL_DOC_URL into $(binary_install_dir)"
+        warn "lazygit not available via apt on this system; following the official lazygit Debian/Ubuntu install path from $LAZYGIT_INSTALL_DOC_URL into /usr/local/bin"
         install_lazygit_binary
       fi
       ;;
@@ -273,17 +255,13 @@ fi
 EOF
   fi
 
-  if [[ "$(detect_os)" == "macos" ]]; then
-    if ! grep -qF '$HOME/.local/bin' "$ZSHRC"; then
-      log "Ensuring ~/.local/bin is on PATH in ~/.zshrc..."
-      cat >> "$ZSHRC" <<'EOF'
+  if ! grep -qF '$HOME/.local/bin' "$ZSHRC"; then
+    log "Ensuring ~/.local/bin is on PATH in ~/.zshrc..."
+    cat >> "$ZSHRC" <<'EOF'
 
 # User-local binaries
 export PATH="$HOME/.local/bin:$PATH"
 EOF
-    fi
-  else
-    perl -0pi -e 's/\n# User-local binaries\nexport PATH="\$HOME\/\.local\/bin:\$PATH"\n//g' "$ZSHRC"
   fi
 
   # Ensure plugins line exists and includes ours.
