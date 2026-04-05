@@ -26,12 +26,8 @@ die() { printf "\n\033[1;31m==>\033[0m %s\n" "$*"; exit 1; }
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
-is_wsl() {
-  grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null || grep -qi microsoft /proc/version 2>/dev/null
-}
-
 binary_install_dir() {
-  if is_wsl; then
+  if [[ "$(detect_os)" == "debian" ]]; then
     echo "/usr/local/bin"
   else
     echo "$HOME/.local/bin"
@@ -208,13 +204,8 @@ install_packages() {
       if sudo apt-get install -y starship; then
         true
       else
-        if is_wsl; then
-          warn "starship not available via apt on this system; installing via official script into /usr/local/bin..."
-          curl -fsSL https://starship.rs/install.sh | sh -s -- -y -b /usr/local/bin
-        else
-          warn "starship not available via apt on this system; installing via official script..."
-          curl -fsSL https://starship.rs/install.sh | sh -s -- -y
-        fi
+        warn "starship not available via apt on this system; installing via official script into /usr/local/bin..."
+        curl -fsSL https://starship.rs/install.sh | sh -s -- -y -b /usr/local/bin
       fi
       if apt-cache show lazygit >/dev/null 2>&1; then
         sudo apt-get install -y lazygit
