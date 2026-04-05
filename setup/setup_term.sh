@@ -162,13 +162,13 @@ install_packages() {
       ensure_homebrew
       log "Installing packages via brew..."
       brew update
-      brew install git curl gh lsd lazygit starship zellij || true
+      brew install git curl fzf gh jd lsd lazygit starship zellij || true
       brew install --cask ghostty || warn "Ghostty install failed; try manually: brew install --cask ghostty"
       ;;
     debian)
       log "Installing packages via apt..."
       sudo apt-get update -y
-      sudo apt-get install -y zsh git curl lsd
+      sudo apt-get install -y zsh git curl fzf lsd
       if apt-cache show gh >/dev/null 2>&1; then
         sudo apt-get install -y gh
       else
@@ -200,9 +200,14 @@ install_packages() {
         warn "lazygit not available via apt on this system; following the official lazygit Debian/Ubuntu install path from $LAZYGIT_INSTALL_DOC_URL into /usr/local/bin"
         install_lazygit_binary
       fi
+      if apt-cache show jd >/dev/null 2>&1; then
+        sudo apt-get install -y jd
+      else
+        warn "jd is not available via apt on this system; install it manually from https://github.com/josephburnett/jd/releases/latest if you need it."
+      fi
       ;;
     *)
-      die "Unsupported OS. Please install zsh, git, curl, gh, lsd, lazygit, starship, and zellij manually and re-run."
+      die "Unsupported OS. Please install zsh, git, curl, fzf, gh, jd, lsd, lazygit, starship, and zellij manually and re-run."
       ;;
   esac
 }
