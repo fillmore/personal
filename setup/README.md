@@ -86,7 +86,19 @@ For `lazygit`, the script tries:
 
 For **Ubuntu 24.04** and similar releases where the distro package may be missing or stale, this fallback follows the official [`jesseduffield/lazygit` Debian and Ubuntu instructions](https://github.com/jesseduffield/lazygit#debian-and-ubuntu) and installs the binary into `/usr/local/bin`.
 
-For `jd`, the script installs the distro package when it is available.
+For `jd`, the script tries:
+
+1. `apt install jd`
+2. fallback to the latest official **prebuilt binary** in `/usr/local/bin/jd`
+
+The equivalent manual install on Linux is:
+
+```bash
+ARCH=$(uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
+curl -fL "https://github.com/josephburnett/jd/releases/latest/download/jd-${ARCH}-linux" -o jd
+sudo install -m 755 jd /usr/local/bin/jd
+rm -f jd
+```
 
 ---
 
