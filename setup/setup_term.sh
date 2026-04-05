@@ -99,13 +99,24 @@ install_zellij_binary() {
 
   url="https://github.com/zellij-org/zellij/releases/latest/download/zellij-${target}.tar.gz"
   tmpdir="$(mktemp -d)"
-  bindir="$HOME/.local/bin"
+  case "$os" in
+    debian)
+      bindir="/usr/local/bin"
+      ;;
+    *)
+      bindir="$HOME/.local/bin"
+      ;;
+  esac
 
-  log "Installing zellij from the latest prebuilt release binary..."
-  mkdir -p "$bindir"
+  log "Installing zellij from the latest prebuilt release binary into $bindir..."
   curl -fL "$url" -o "$tmpdir/zellij.tar.gz"
   tar -xzf "$tmpdir/zellij.tar.gz" -C "$tmpdir"
-  install -m 755 "$tmpdir/zellij" "$bindir/zellij"
+  if [[ "$bindir" == "/usr/local/bin" ]]; then
+    sudo install -m 755 -D "$tmpdir/zellij" "$bindir/zellij"
+  else
+    mkdir -p "$bindir"
+    install -m 755 "$tmpdir/zellij" "$bindir/zellij"
+  fi
   rm -rf "$tmpdir"
 
   log "zellij installed to $bindir/zellij"

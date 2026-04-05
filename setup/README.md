@@ -73,7 +73,7 @@ The script installs `gh` and `lsd` first:
 For `zellij`, the script tries the following in order:
 
 1. `apt` package if available
-2. fallback to the latest official **prebuilt binary** in `~/.local/bin/zellij`
+2. fallback to the latest official **prebuilt binary** in `/usr/local/bin/zellij`
 
 This avoids compiling Rust from source.
 
@@ -101,7 +101,7 @@ It also ensures `~/.local/bin` is on your `PATH` when needed.
 
 - On **macOS**, the script will install `Git` via the Xcode Command Line Tools if needed, install `Homebrew` automatically if it is missing, and use the built-in `zsh` instead of installing it.
 - On **Linux**, the script expects `sudo` access.
-- On **WSL**, the script follows the same Debian flow; `zellij` falls back to `~/.local/bin`, while `lazygit` follows the upstream install pattern and lands in `/usr/local/bin` when the distro package is unavailable.
+- On **WSL**, the script follows the same Debian flow; both `zellij` and `lazygit` fall back to `/usr/local/bin` when the distro package is unavailable.
 - On Linux, the script can optionally set `zsh` as your default shell. On macOS, it skips that prompt.
 - It is intended to be safe to re-run if you want to refresh the setup.
 
