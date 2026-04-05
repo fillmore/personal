@@ -82,7 +82,7 @@ For `lazygit`, the script tries:
 1. `apt install lazygit`
 2. fallback to the latest official **prebuilt binary** in `/usr/local/bin/lazygit`
 
-For **Ubuntu 24.04** and similar releases where the distro package may be missing or stale, this fallback follows the official [`jesseduffield/lazygit` Debian and Ubuntu instructions](https://github.com/jesseduffield/lazygit#debian-and-ubuntu), installing the binary into `/usr/local/bin`.
+For **Ubuntu 24.04** and similar releases where the distro package may be missing or stale, this fallback follows the official [`jesseduffield/lazygit` Debian and Ubuntu instructions](https://github.com/jesseduffield/lazygit#debian-and-ubuntu) and installs the binary into `/usr/local/bin`.
 
 ---
 
@@ -93,7 +93,7 @@ For **Ubuntu 24.04** and similar releases where the distro package may be missin
 - `~/.config/zellij/layouts/ide.kdl`
 - `~/.config/ghostty/config.ghostty` *(macOS only)*
 
-It also ensures `~/.local/bin` is on your `PATH` when needed.
+It also ensures `~/.local/bin` is on your `PATH` for user-local binaries when needed.
 
 ---
 
@@ -101,7 +101,7 @@ It also ensures `~/.local/bin` is on your `PATH` when needed.
 
 - On **macOS**, the script will install `Git` via the Xcode Command Line Tools if needed, install `Homebrew` automatically if it is missing, and use the built-in `zsh` instead of installing it.
 - On **Linux**, the script expects `sudo` access.
-- On **WSL**, the script follows the same Debian flow; both `zellij` and `lazygit` fall back to `/usr/local/bin` when the distro package is unavailable.
+- On **Linux**, including **WSL**, the script keeps fallback-installed tools in `/usr/local/bin` for a system-wide path.
 - On Linux, the script can optionally set `zsh` as your default shell. On macOS, it skips that prompt.
 - It is intended to be safe to re-run if you want to refresh the setup.
 
