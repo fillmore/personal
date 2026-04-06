@@ -67,10 +67,32 @@ brew install gh jd fzf lsd lazygit starship zellij
 ```
 
 ### Debian / Ubuntu
-The script installs the baseline CLI tools via `apt`, including `fzf`, and then adds `gh` from the distro or its official apt repository when needed:
+The script installs the baseline CLI tools via `apt`, and then adds `gh` from the distro or its official apt repository when needed:
 
 1. `apt` package if available
 2. otherwise, the official GitHub CLI apt repository
+
+For `fzf`, the script installs the latest official release binary from GitHub into `/usr/local/bin/fzf` instead of relying on the older distro package.
+
+```bash
+FZF_VERSION="$(curl -fsSL https://api.github.com/repos/junegunn/fzf/releases/latest | sed -nE 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v?([^"]+)".*/\1/p')"
+ARCH=$(uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
+curl -fL "https://github.com/junegunn/fzf/releases/latest/download/fzf-${FZF_VERSION}-linux_${ARCH}.tar.gz" -o fzf.tar.gz
+tar -xzf fzf.tar.gz fzf
+sudo install -m 755 fzf /usr/local/bin/fzf
+rm -f fzf fzf.tar.gz
+```
+
+For `lsd`, the script also installs the latest official release binary from GitHub into `/usr/local/bin/lsd` instead of relying on the older distro package.
+
+```bash
+LSD_VERSION="$(curl -fsSL https://api.github.com/repos/lsd-rs/lsd/releases/latest | sed -nE 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v?([^"]+)".*/\1/p')"
+ARCH=$(uname -m | sed -e 's/x86_64/x86_64-unknown-linux-gnu/' -e 's/aarch64/aarch64-unknown-linux-gnu/' -e 's/armv7l/arm-unknown-linux-gnueabihf/' -e 's/i686/i686-unknown-linux-gnu/')
+curl -fL "https://github.com/lsd-rs/lsd/releases/latest/download/lsd-v${LSD_VERSION}-${ARCH}.tar.gz" -o lsd.tar.gz
+tar -xzf lsd.tar.gz
+sudo install -m 755 "lsd-v${LSD_VERSION}-${ARCH}/lsd" /usr/local/bin/lsd
+rm -rf "lsd-v${LSD_VERSION}-${ARCH}" lsd.tar.gz
+```
 
 For `zellij`, the script tries the following in order:
 
