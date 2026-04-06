@@ -20,6 +20,7 @@ The script sets up:
 - `jq`
 - `lazygit`
 - `lsd` (`ls` replacement)
+- `yq` (YAML processor)
 - [`starship`](https://starship.rs/) prompt
 - [`zellij`](https://zellij.dev/)
 - Saved Zellij IDE layout: `zellij --layout ide`, `zjide`, or `zjide <session-name>`
@@ -58,23 +59,23 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/fillmore/personal/master
 
 ---
 
-## Zellij installation behavior
+## CLI installation behavior
 
 ### macOS
 Uses Homebrew:
 
 ```bash
-brew install gh jd jq fzf lsd lazygit starship zellij
+brew install gh jd jq fzf lsd lazygit starship yq zellij
 ```
 
 ### Debian / Ubuntu
 The script installs the baseline system dependencies with `apt`, then uses Homebrew for the CLI tools so the versions stay consistent with macOS:
 
 ```bash
-brew install gh jd jq fzf lsd lazygit starship zellij
+brew install gh jd jq fzf lsd lazygit starship yq zellij
 ```
 
-That means `fzf`, `gh`, `jd`, `jq`, `lsd`, `lazygit`, `starship`, and `zellij` all come from Homebrew on Debian/Ubuntu too.
+That means `fzf`, `gh`, `jd`, `jq`, `lsd`, `lazygit`, `starship`, `yq`, and `zellij` all come from Homebrew on Debian/Ubuntu too.
 
 ---
 
