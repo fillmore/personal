@@ -83,6 +83,17 @@ sudo install -m 755 fzf /usr/local/bin/fzf
 rm -f fzf fzf.tar.gz
 ```
 
+For `lsd`, the script also installs the latest official release binary from GitHub into `/usr/local/bin/lsd` instead of relying on the older distro package.
+
+```bash
+LSD_VERSION="$(curl -fsSL https://api.github.com/repos/lsd-rs/lsd/releases/latest | sed -nE 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v?([^"]+)".*/\1/p')"
+ARCH=$(uname -m | sed -e 's/x86_64/x86_64-unknown-linux-gnu/' -e 's/aarch64/aarch64-unknown-linux-gnu/' -e 's/armv7l/arm-unknown-linux-gnueabihf/' -e 's/i686/i686-unknown-linux-gnu/')
+curl -fL "https://github.com/lsd-rs/lsd/releases/latest/download/lsd-v${LSD_VERSION}-${ARCH}.tar.gz" -o lsd.tar.gz
+tar -xzf lsd.tar.gz
+sudo install -m 755 "lsd-v${LSD_VERSION}-${ARCH}/lsd" /usr/local/bin/lsd
+rm -rf "lsd-v${LSD_VERSION}-${ARCH}" lsd.tar.gz
+```
+
 For `zellij`, the script tries the following in order:
 
 1. `apt` package if available

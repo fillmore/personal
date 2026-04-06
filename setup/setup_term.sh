@@ -15,6 +15,7 @@ AUTOSUGGEST_REPO="https://github.com/zsh-users/zsh-autosuggestions.git"
 SYNTAX_HL_REPO="https://github.com/zsh-users/zsh-syntax-highlighting.git"
 AUTOCOMPLETE_REPO="https://github.com/marlonrichert/zsh-autocomplete.git"
 FZF_RELEASES_URL="https://github.com/junegunn/fzf/releases/latest"
+LSD_RELEASES_URL="https://github.com/lsd-rs/lsd/releases/latest"
 LAZYGIT_INSTALL_DOC_URL="https://github.com/jesseduffield/lazygit#debian-and-ubuntu"
 
 AUTOSUGGEST_DIR="$PLUGINS_DIR/zsh-autosuggestions"
@@ -168,6 +169,49 @@ install_fzf_binary() {
   log "fzf installed to $bindir/fzf"
 }
 
+install_lsd_binary() {
+  local os arch target version url tmpdir bindir release_metadata extracted_dir
+  os="$(detect_os)"
+  arch="$(uname -m)"
+
+  case "$os:$arch" in
+    debian:x86_64|debian:amd64)
+      target="x86_64-unknown-linux-gnu"
+      ;;
+    debian:aarch64|debian:arm64)
+      target="aarch64-unknown-linux-gnu"
+      ;;
+    debian:armv7l)
+      target="arm-unknown-linux-gnueabihf"
+      ;;
+    debian:i686|debian:i386)
+      target="i686-unknown-linux-gnu"
+      ;;
+    *)
+      warn "No prebuilt lsd binary mapping is available for $os/$arch in this script."
+      return 1
+      ;;
+  esac
+
+  release_metadata="$(curl -fsSL https://api.github.com/repos/lsd-rs/lsd/releases/latest)"
+  version="$(printf '%s\n' "$release_metadata" | sed -nE 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v?([^"]+)".*/\1/p')"
+
+  [[ -n "$version" ]] || die "Unable to determine the latest lsd version from GitHub."
+
+  url="https://github.com/lsd-rs/lsd/releases/latest/download/lsd-v${version}-${target}.tar.gz"
+  tmpdir="$(mktemp -d)"
+  bindir="/usr/local/bin"
+
+  log "Installing lsd from the latest prebuilt release binary into $bindir..."
+  curl -fL "$url" -o "$tmpdir/lsd.tar.gz"
+  tar -xzf "$tmpdir/lsd.tar.gz" -C "$tmpdir"
+  extracted_dir="$tmpdir/lsd-v${version}-${target}"
+  sudo install -m 755 -D "$extracted_dir/lsd" "$bindir/lsd"
+  rm -rf "$tmpdir"
+
+  log "lsd installed to $bindir/lsd"
+}
+
 install_lazygit_binary() {
   local os arch asset version url tmpdir bindir release_metadata
   os="$(detect_os)"
@@ -259,7 +303,7 @@ install_packages() {
     debian)
       log "Installing packages via apt..."
       sudo apt-get update -y
-      sudo apt-get install -y zsh git curl lsd
+      sudo apt-get install -y zsh git curl
       if apt-cache show gh >/dev/null 2>&1; then
         sudo apt-get install -y gh
       else
@@ -274,6 +318,8 @@ install_packages() {
       fi
       warn "Installing fzf from the latest GitHub release at $FZF_RELEASES_URL because distro packages can lag behind upstream."
       install_fzf_binary
+      warn "Installing lsd from the latest GitHub release at $LSD_RELEASES_URL because distro packages can lag behind upstream."
+      install_lsd_binary
       if apt-cache show zellij >/dev/null 2>&1; then
         sudo apt-get install -y zellij
       else
