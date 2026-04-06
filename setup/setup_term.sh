@@ -168,6 +168,19 @@ fi
 EOF
   fi
 
+  if ! grep -qF '/home/linuxbrew/.linuxbrew/bin/brew' "$ZSHRC" && ! grep -qF '$HOME/.linuxbrew/bin/brew' "$ZSHRC"; then
+    log "Ensuring Linuxbrew is available in future zsh sessions..."
+    cat >> "$ZSHRC" <<'EOF'
+
+# Linuxbrew
+if [ -x /home/linuxbrew/.linuxbrew/bin/brew ]; then
+  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+elif [ -x "$HOME/.linuxbrew/bin/brew" ]; then
+  eval "$("$HOME/.linuxbrew/bin/brew" shellenv)"
+fi
+EOF
+  fi
+
   if ! grep -qF '$HOME/.local/bin' "$ZSHRC"; then
     log "Ensuring ~/.local/bin is on PATH in ~/.zshrc..."
     cat >> "$ZSHRC" <<'EOF'
