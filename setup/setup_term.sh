@@ -66,6 +66,8 @@ ensure_git_on_macos() {
 }
 
 ensure_homebrew() {
+  eval_brew_shellenv
+
   if have brew; then
     return
   fi
@@ -102,47 +104,11 @@ install_packages() {
       log "Installing packages via apt..."
       sudo apt-get update -y
       sudo apt-get install -y zsh git curl build-essential procps file
-      if apt-cache show gh >/dev/null 2>&1; then
-        sudo apt-get install -y gh
-      else
-        log "Installing GitHub CLI from the official apt repository..."
-        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-          | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-        sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
-        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-          | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
-        sudo apt-get update -y
-        sudo apt-get install -y gh
-      fi
       ensure_homebrew
       log "Refreshing Homebrew formulas..."
       brew update
-      warn "Installing newer fzf and lsd builds via Homebrew instead of the stale distro packages."
-      install_brew_packages fzf lsd
-      if apt-cache show zellij >/dev/null 2>&1 && sudo apt-get install -y zellij; then
-        true
-      else
-        warn "zellij is not available via apt on this system; installing via Homebrew instead."
-        install_brew_packages zellij
-      fi
-      if sudo apt-get install -y starship; then
-        true
-      else
-        warn "starship is not available via apt on this system; installing via Homebrew instead."
-        install_brew_packages starship
-      fi
-      if apt-cache show lazygit >/dev/null 2>&1 && sudo apt-get install -y lazygit; then
-        true
-      else
-        warn "lazygit is not available via apt on this system; installing via Homebrew instead."
-        install_brew_packages lazygit
-      fi
-      if apt-cache show jd >/dev/null 2>&1 && sudo apt-get install -y jd; then
-        true
-      else
-        warn "jd is not available via apt on this system; installing via Homebrew instead."
-        install_brew_packages jd
-      fi
+      log "Installing CLI tools via Homebrew so versions stay consistent across platforms..."
+      install_brew_packages fzf gh jd lsd lazygit starship zellij
       ;;
     *)
       die "Unsupported OS. Please install zsh, git, curl, Homebrew, fzf, gh, jd, lsd, lazygit, starship, and zellij manually and re-run."
@@ -195,19 +161,6 @@ if [ -x /opt/homebrew/bin/brew ]; then
 elif [ -x /usr/local/bin/brew ]; then
   eval "$(/usr/local/bin/brew shellenv)"
 elif [ -x /home/linuxbrew/.linuxbrew/bin/brew ]; then
-  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-elif [ -x "$HOME/.linuxbrew/bin/brew" ]; then
-  eval "$("$HOME/.linuxbrew/bin/brew" shellenv)"
-fi
-EOF
-  fi
-
-  if ! grep -qF '/home/linuxbrew/.linuxbrew/bin/brew' "$ZSHRC" && ! grep -qF '$HOME/.linuxbrew/bin/brew' "$ZSHRC"; then
-    log "Ensuring Linuxbrew is available in future zsh sessions..."
-    cat >> "$ZSHRC" <<'EOF'
-
-# Linuxbrew
-if [ -x /home/linuxbrew/.linuxbrew/bin/brew ]; then
   eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 elif [ -x "$HOME/.linuxbrew/bin/brew" ]; then
   eval "$("$HOME/.linuxbrew/bin/brew" shellenv)"

@@ -67,13 +67,13 @@ brew install gh jd fzf lsd lazygit starship zellij
 ```
 
 ### Debian / Ubuntu
-The script installs the baseline system dependencies and `gh` via `apt` (or the official GitHub CLI apt repository), then uses Homebrew for the newer interactive CLI tools:
+The script installs the baseline system dependencies with `apt`, then uses Homebrew for the CLI tools so the versions stay consistent with macOS:
 
 ```bash
-brew install fzf jd lsd lazygit starship zellij
+brew install gh jd fzf lsd lazygit starship zellij
 ```
 
-This keeps `fzf` and `lsd` newer than the distro packages and uses the same Homebrew path as the fallback for `zellij`, `lazygit`, `jd`, and `starship` when needed.
+That means `fzf`, `gh`, `jd`, `lsd`, `lazygit`, `starship`, and `zellij` all come from Homebrew on Debian/Ubuntu too.
 
 ---
 
