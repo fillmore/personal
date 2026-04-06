@@ -168,6 +168,19 @@ fi
 EOF
   fi
 
+  if ! grep -qF '/home/linuxbrew/.linuxbrew/bin/brew' "$ZSHRC" && ! grep -qF '$HOME/.linuxbrew/bin/brew' "$ZSHRC"; then
+    log "Ensuring Linuxbrew is available in future zsh sessions..."
+    cat >> "$ZSHRC" <<'EOF'
+
+# Linuxbrew
+if [ -x /home/linuxbrew/.linuxbrew/bin/brew ]; then
+  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+elif [ -x "$HOME/.linuxbrew/bin/brew" ]; then
+  eval "$("$HOME/.linuxbrew/bin/brew" shellenv)"
+fi
+EOF
+  fi
+
   if ! grep -qF '$HOME/.local/bin' "$ZSHRC"; then
     log "Ensuring ~/.local/bin is on PATH in ~/.zshrc..."
     cat >> "$ZSHRC" <<'EOF'
@@ -229,17 +242,19 @@ EOF
 ensure_starship_in_zshrc() {
   [[ -f "$ZSHRC" ]] || touch "$ZSHRC"
 
-  if ! have starship; then
-    warn "starship command not found; skipping starship init."
-    return
-  fi
-
-  if grep -qE 'starship init zsh' "$ZSHRC"; then
+  if perl -0ne 'exit !(m/\n# Starship prompt\nif command -v starship >\/dev\/null 2>&1; then\n  eval "\$\(starship init zsh\)"\nfi\n?/s)' "$ZSHRC" \
+    && ! grep -qE '^[[:space:]]*eval "\$\((/opt/homebrew/bin/|/usr/local/bin/|/home/linuxbrew/.linuxbrew/bin/)?starship init zsh\)"[[:space:]]*$' "$ZSHRC"; then
     log "Starship already initialized in ~/.zshrc."
     return
   fi
 
-  log "Adding Starship init to ~/.zshrc..."
+  if grep -qE '^[[:space:]]*eval "\$\((/opt/homebrew/bin/|/usr/local/bin/|/home/linuxbrew/.linuxbrew/bin/)?starship init zsh\)"[[:space:]]*$' "$ZSHRC"; then
+    log "Normalizing Starship init in ~/.zshrc..."
+    perl -0pi -e 's/\n?# Starship prompt\nif command -v starship >\/dev\/null 2>&1; then\n  eval "\$\(starship init zsh\)"\nfi\n?/\n/g; s/\n?eval "\$\((?:\/opt\/homebrew\/bin\/|\/usr\/local\/bin\/|\/home\/linuxbrew\/\.linuxbrew\/bin\/)?starship init zsh\)"\n?/\n/g;' "$ZSHRC"
+  else
+    log "Adding Starship init to ~/.zshrc..."
+  fi
+
   cat >> "$ZSHRC" <<'EOF'
 
 # Starship prompt
@@ -247,6 +262,10 @@ if command -v starship >/dev/null 2>&1; then
   eval "$(starship init zsh)"
 fi
 EOF
+
+  if ! have starship; then
+    warn "starship command not found in the current shell; it will activate in new shells once Homebrew is on PATH."
+  fi
 }
 
 ensure_starship_config() {
