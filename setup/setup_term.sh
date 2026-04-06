@@ -17,6 +17,7 @@ AUTOCOMPLETE_REPO="https://github.com/marlonrichert/zsh-autocomplete.git"
 FZF_RELEASES_URL="https://github.com/junegunn/fzf/releases/latest"
 LSD_RELEASES_URL="https://github.com/lsd-rs/lsd/releases/latest"
 LAZYGIT_INSTALL_DOC_URL="https://github.com/jesseduffield/lazygit#debian-and-ubuntu"
+INSTALL_BIN_DIR="/usr/local/bin"
 
 AUTOSUGGEST_DIR="$PLUGINS_DIR/zsh-autosuggestions"
 SYNTAX_HL_DIR="$PLUGINS_DIR/zsh-syntax-highlighting"
@@ -27,6 +28,61 @@ warn() { printf "\n\033[1;33m==>\033[0m %s\n" "$*"; }
 die() { printf "\n\033[1;31m==>\033[0m %s\n" "$*"; exit 1; }
 
 have() { command -v "$1" >/dev/null 2>&1; }
+
+github_latest_release_version() {
+  local repo="$1"
+
+  curl -fsSL "https://api.github.com/repos/${repo}/releases/latest" \
+    | sed -nE 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v?([^"]+)".*/\1/p'
+}
+
+require_github_latest_release_version() {
+  local name="$1"
+  local repo="$2"
+  local version
+
+  version="$(github_latest_release_version "$repo")"
+  [[ -n "$version" ]] || die "Unable to determine the latest ${name} version from GitHub."
+  printf '%s\n' "$version"
+}
+
+install_downloaded_binary() {
+  local source_path="$1"
+  local command_name="$2"
+
+  sudo install -m 755 -D "$source_path" "$INSTALL_BIN_DIR/$command_name"
+  log "$command_name installed to $INSTALL_BIN_DIR/$command_name"
+}
+
+install_release_tarball_binary() {
+  local command_name="$1"
+  local repo="$2"
+  local asset_name="$3"
+  local extracted_binary_path="$4"
+  local tmpdir
+
+  tmpdir="$(mktemp -d)"
+
+  log "Installing $command_name from the latest prebuilt release binary into $INSTALL_BIN_DIR..."
+  curl -fL "https://github.com/${repo}/releases/latest/download/${asset_name}" -o "$tmpdir/archive.tar.gz"
+  tar -xzf "$tmpdir/archive.tar.gz" -C "$tmpdir"
+  install_downloaded_binary "$tmpdir/$extracted_binary_path" "$command_name"
+  rm -rf "$tmpdir"
+}
+
+install_release_raw_binary() {
+  local command_name="$1"
+  local repo="$2"
+  local asset_name="$3"
+  local tmpdir
+
+  tmpdir="$(mktemp -d)"
+
+  log "Installing $command_name from the latest prebuilt release binary into $INSTALL_BIN_DIR..."
+  curl -fL "https://github.com/${repo}/releases/latest/download/${asset_name}" -o "$tmpdir/$command_name"
+  install_downloaded_binary "$tmpdir/$command_name" "$command_name"
+  rm -rf "$tmpdir"
+}
 
 detect_os() {
   if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -76,7 +132,7 @@ ensure_homebrew() {
 }
 
 install_zellij_binary() {
-  local os arch target url tmpdir bindir
+  local os arch target
   os="$(detect_os)"
   arch="$(uname -m)"
 
@@ -99,21 +155,11 @@ install_zellij_binary() {
       ;;
   esac
 
-  url="https://github.com/zellij-org/zellij/releases/latest/download/zellij-${target}.tar.gz"
-  tmpdir="$(mktemp -d)"
-  bindir="/usr/local/bin"
-
-  log "Installing zellij from the latest prebuilt release binary into $bindir..."
-  curl -fL "$url" -o "$tmpdir/zellij.tar.gz"
-  tar -xzf "$tmpdir/zellij.tar.gz" -C "$tmpdir"
-  sudo install -m 755 -D "$tmpdir/zellij" "$bindir/zellij"
-  rm -rf "$tmpdir"
-
-  log "zellij installed to $bindir/zellij"
+  install_release_tarball_binary "zellij" "zellij-org/zellij" "zellij-${target}.tar.gz" "zellij"
 }
 
 install_fzf_binary() {
-  local os arch target version url tmpdir bindir release_metadata
+  local os arch target version
   os="$(detect_os)"
   arch="$(uname -m)"
 
@@ -151,26 +197,12 @@ install_fzf_binary() {
       ;;
   esac
 
-  release_metadata="$(curl -fsSL https://api.github.com/repos/junegunn/fzf/releases/latest)"
-  version="$(printf '%s\n' "$release_metadata" | sed -nE 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v?([^"]+)".*/\1/p')"
-
-  [[ -n "$version" ]] || die "Unable to determine the latest fzf version from GitHub."
-
-  url="https://github.com/junegunn/fzf/releases/latest/download/fzf-${version}-${target}.tar.gz"
-  tmpdir="$(mktemp -d)"
-  bindir="/usr/local/bin"
-
-  log "Installing fzf from the latest prebuilt release binary into $bindir..."
-  curl -fL "$url" -o "$tmpdir/fzf.tar.gz"
-  tar -xzf "$tmpdir/fzf.tar.gz" -C "$tmpdir" fzf
-  sudo install -m 755 -D "$tmpdir/fzf" "$bindir/fzf"
-  rm -rf "$tmpdir"
-
-  log "fzf installed to $bindir/fzf"
+  version="$(require_github_latest_release_version "fzf" "junegunn/fzf")"
+  install_release_tarball_binary "fzf" "junegunn/fzf" "fzf-${version}-${target}.tar.gz" "fzf"
 }
 
 install_lsd_binary() {
-  local os arch target version url tmpdir bindir release_metadata extracted_dir
+  local os arch target version
   os="$(detect_os)"
   arch="$(uname -m)"
 
@@ -193,27 +225,12 @@ install_lsd_binary() {
       ;;
   esac
 
-  release_metadata="$(curl -fsSL https://api.github.com/repos/lsd-rs/lsd/releases/latest)"
-  version="$(printf '%s\n' "$release_metadata" | sed -nE 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v?([^"]+)".*/\1/p')"
-
-  [[ -n "$version" ]] || die "Unable to determine the latest lsd version from GitHub."
-
-  url="https://github.com/lsd-rs/lsd/releases/latest/download/lsd-v${version}-${target}.tar.gz"
-  tmpdir="$(mktemp -d)"
-  bindir="/usr/local/bin"
-
-  log "Installing lsd from the latest prebuilt release binary into $bindir..."
-  curl -fL "$url" -o "$tmpdir/lsd.tar.gz"
-  tar -xzf "$tmpdir/lsd.tar.gz" -C "$tmpdir"
-  extracted_dir="$tmpdir/lsd-v${version}-${target}"
-  sudo install -m 755 -D "$extracted_dir/lsd" "$bindir/lsd"
-  rm -rf "$tmpdir"
-
-  log "lsd installed to $bindir/lsd"
+  version="$(require_github_latest_release_version "lsd" "lsd-rs/lsd")"
+  install_release_tarball_binary "lsd" "lsd-rs/lsd" "lsd-v${version}-${target}.tar.gz" "lsd-v${version}-${target}/lsd"
 }
 
 install_lazygit_binary() {
-  local os arch asset version url tmpdir bindir release_metadata
+  local os arch asset version
   os="$(detect_os)"
   arch="$(uname -m)"
 
@@ -236,26 +253,12 @@ install_lazygit_binary() {
       ;;
   esac
 
-  release_metadata="$(curl -fsSL https://api.github.com/repos/jesseduffield/lazygit/releases/latest)"
-  version="$(printf '%s\n' "$release_metadata" | sed -nE 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v?([^"]+)".*/\1/p')"
-
-  [[ -n "$version" ]] || die "Unable to determine the latest lazygit version from GitHub."
-
-  url="https://github.com/jesseduffield/lazygit/releases/latest/download/lazygit_${version}_${asset}"
-  tmpdir="$(mktemp -d)"
-  bindir="/usr/local/bin"
-
-  log "Installing lazygit from the latest prebuilt release binary into $bindir..."
-  curl -fL "$url" -o "$tmpdir/lazygit.tar.gz"
-  tar -xzf "$tmpdir/lazygit.tar.gz" -C "$tmpdir" lazygit
-  sudo install -m 755 -D "$tmpdir/lazygit" "$bindir/lazygit"
-  rm -rf "$tmpdir"
-
-  log "lazygit installed to $bindir/lazygit"
+  version="$(require_github_latest_release_version "lazygit" "jesseduffield/lazygit")"
+  install_release_tarball_binary "lazygit" "jesseduffield/lazygit" "lazygit_${version}_${asset}" "lazygit"
 }
 
 install_jd_binary() {
-  local os arch asset url tmpdir bindir
+  local os arch asset
   os="$(detect_os)"
   arch="$(uname -m)"
 
@@ -275,16 +278,7 @@ install_jd_binary() {
       ;;
   esac
 
-  url="https://github.com/josephburnett/jd/releases/latest/download/${asset}"
-  tmpdir="$(mktemp -d)"
-  bindir="/usr/local/bin"
-
-  log "Installing jd from the latest prebuilt release binary into $bindir..."
-  curl -fL "$url" -o "$tmpdir/jd"
-  sudo install -m 755 -D "$tmpdir/jd" "$bindir/jd"
-  rm -rf "$tmpdir"
-
-  log "jd installed to $bindir/jd"
+  install_release_raw_binary "jd" "josephburnett/jd" "$asset"
 }
 
 install_packages() {
