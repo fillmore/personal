@@ -17,6 +17,7 @@ The script sets up:
 - `zsh` configuration via `oh-my-zsh` and plugins *(macOS uses the built-in `zsh`)*
 - `gh` (GitHub CLI)
 - `jd`
+- `jq`
 - `lazygit`
 - `lsd` (`ls` replacement)
 - [`starship`](https://starship.rs/) prompt
@@ -63,17 +64,17 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/fillmore/personal/master
 Uses Homebrew:
 
 ```bash
-brew install gh jd fzf lsd lazygit starship zellij
+brew install gh jd jq fzf lsd lazygit starship zellij
 ```
 
 ### Debian / Ubuntu
 The script installs the baseline system dependencies with `apt`, then uses Homebrew for the CLI tools so the versions stay consistent with macOS:
 
 ```bash
-brew install gh jd fzf lsd lazygit starship zellij
+brew install gh jd jq fzf lsd lazygit starship zellij
 ```
 
-That means `fzf`, `gh`, `jd`, `lsd`, `lazygit`, `starship`, and `zellij` all come from Homebrew on Debian/Ubuntu too.
+That means `fzf`, `gh`, `jd`, `jq`, `lsd`, `lazygit`, `starship`, and `zellij` all come from Homebrew on Debian/Ubuntu too.
 
 ---
 
