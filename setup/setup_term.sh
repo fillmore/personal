@@ -14,6 +14,7 @@ GHOSTTY_CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/ghostty/config.ghostty"
 AUTOSUGGEST_REPO="https://github.com/zsh-users/zsh-autosuggestions.git"
 SYNTAX_HL_REPO="https://github.com/zsh-users/zsh-syntax-highlighting.git"
 AUTOCOMPLETE_REPO="https://github.com/marlonrichert/zsh-autocomplete.git"
+FZF_RELEASES_URL="https://github.com/junegunn/fzf/releases/latest"
 LAZYGIT_INSTALL_DOC_URL="https://github.com/jesseduffield/lazygit#debian-and-ubuntu"
 
 AUTOSUGGEST_DIR="$PLUGINS_DIR/zsh-autosuggestions"
@@ -110,6 +111,63 @@ install_zellij_binary() {
   log "zellij installed to $bindir/zellij"
 }
 
+install_fzf_binary() {
+  local os arch target version url tmpdir bindir release_metadata
+  os="$(detect_os)"
+  arch="$(uname -m)"
+
+  case "$os:$arch" in
+    debian:x86_64|debian:amd64)
+      target="linux_amd64"
+      ;;
+    debian:aarch64|debian:arm64)
+      target="linux_arm64"
+      ;;
+    debian:armv7l)
+      target="linux_armv7"
+      ;;
+    debian:armv6l)
+      target="linux_armv6"
+      ;;
+    debian:armv5*)
+      target="linux_armv5"
+      ;;
+    debian:loongarch64)
+      target="linux_loong64"
+      ;;
+    debian:ppc64le)
+      target="linux_ppc64le"
+      ;;
+    debian:riscv64)
+      target="linux_riscv64"
+      ;;
+    debian:s390x)
+      target="linux_s390x"
+      ;;
+    *)
+      warn "No prebuilt fzf binary mapping is available for $os/$arch in this script."
+      return 1
+      ;;
+  esac
+
+  release_metadata="$(curl -fsSL https://api.github.com/repos/junegunn/fzf/releases/latest)"
+  version="$(printf '%s\n' "$release_metadata" | sed -nE 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v?([^"]+)".*/\1/p')"
+
+  [[ -n "$version" ]] || die "Unable to determine the latest fzf version from GitHub."
+
+  url="https://github.com/junegunn/fzf/releases/latest/download/fzf-${version}-${target}.tar.gz"
+  tmpdir="$(mktemp -d)"
+  bindir="/usr/local/bin"
+
+  log "Installing fzf from the latest prebuilt release binary into $bindir..."
+  curl -fL "$url" -o "$tmpdir/fzf.tar.gz"
+  tar -xzf "$tmpdir/fzf.tar.gz" -C "$tmpdir" fzf
+  sudo install -m 755 -D "$tmpdir/fzf" "$bindir/fzf"
+  rm -rf "$tmpdir"
+
+  log "fzf installed to $bindir/fzf"
+}
+
 install_lazygit_binary() {
   local os arch asset version url tmpdir bindir release_metadata
   os="$(detect_os)"
@@ -201,7 +259,7 @@ install_packages() {
     debian)
       log "Installing packages via apt..."
       sudo apt-get update -y
-      sudo apt-get install -y zsh git curl fzf lsd
+      sudo apt-get install -y zsh git curl lsd
       if apt-cache show gh >/dev/null 2>&1; then
         sudo apt-get install -y gh
       else
@@ -214,6 +272,8 @@ install_packages() {
         sudo apt-get update -y
         sudo apt-get install -y gh
       fi
+      warn "Installing fzf from the latest GitHub release at $FZF_RELEASES_URL because distro packages can lag behind upstream."
+      install_fzf_binary
       if apt-cache show zellij >/dev/null 2>&1; then
         sudo apt-get install -y zellij
       else
