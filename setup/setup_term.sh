@@ -14,10 +14,6 @@ GHOSTTY_CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/ghostty/config.ghostty"
 AUTOSUGGEST_REPO="https://github.com/zsh-users/zsh-autosuggestions.git"
 SYNTAX_HL_REPO="https://github.com/zsh-users/zsh-syntax-highlighting.git"
 AUTOCOMPLETE_REPO="https://github.com/marlonrichert/zsh-autocomplete.git"
-FZF_RELEASES_URL="https://github.com/junegunn/fzf/releases/latest"
-LSD_RELEASES_URL="https://github.com/lsd-rs/lsd/releases/latest"
-LAZYGIT_INSTALL_DOC_URL="https://github.com/jesseduffield/lazygit#debian-and-ubuntu"
-INSTALL_BIN_DIR="/usr/local/bin"
 
 AUTOSUGGEST_DIR="$PLUGINS_DIR/zsh-autosuggestions"
 SYNTAX_HL_DIR="$PLUGINS_DIR/zsh-syntax-highlighting"
@@ -29,59 +25,21 @@ die() { printf "\n\033[1;31m==>\033[0m %s\n" "$*"; exit 1; }
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
-github_latest_release_version() {
-  local repo="$1"
-
-  curl -fsSL "https://api.github.com/repos/${repo}/releases/latest" \
-    | sed -nE 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v?([^"]+)".*/\1/p'
+eval_brew_shellenv() {
+  if [[ -x /opt/homebrew/bin/brew ]]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+  elif [[ -x /usr/local/bin/brew ]]; then
+    eval "$(/usr/local/bin/brew shellenv)"
+  elif [[ -x /home/linuxbrew/.linuxbrew/bin/brew ]]; then
+    eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+  elif [[ -x "$HOME/.linuxbrew/bin/brew" ]]; then
+    eval "$("$HOME/.linuxbrew/bin/brew" shellenv)"
+  fi
 }
 
-require_github_latest_release_version() {
-  local name="$1"
-  local repo="$2"
-  local version
-
-  version="$(github_latest_release_version "$repo")"
-  [[ -n "$version" ]] || die "Unable to determine the latest ${name} version from GitHub."
-  printf '%s\n' "$version"
-}
-
-install_downloaded_binary() {
-  local source_path="$1"
-  local command_name="$2"
-
-  sudo install -m 755 -D "$source_path" "$INSTALL_BIN_DIR/$command_name"
-  log "$command_name installed to $INSTALL_BIN_DIR/$command_name"
-}
-
-install_release_tarball_binary() {
-  local command_name="$1"
-  local repo="$2"
-  local asset_name="$3"
-  local extracted_binary_path="$4"
-  local tmpdir
-
-  tmpdir="$(mktemp -d)"
-
-  log "Installing $command_name from the latest prebuilt release binary into $INSTALL_BIN_DIR..."
-  curl -fL "https://github.com/${repo}/releases/latest/download/${asset_name}" -o "$tmpdir/archive.tar.gz"
-  tar -xzf "$tmpdir/archive.tar.gz" -C "$tmpdir"
-  install_downloaded_binary "$tmpdir/$extracted_binary_path" "$command_name"
-  rm -rf "$tmpdir"
-}
-
-install_release_raw_binary() {
-  local command_name="$1"
-  local repo="$2"
-  local asset_name="$3"
-  local tmpdir
-
-  tmpdir="$(mktemp -d)"
-
-  log "Installing $command_name from the latest prebuilt release binary into $INSTALL_BIN_DIR..."
-  curl -fL "https://github.com/${repo}/releases/latest/download/${asset_name}" -o "$tmpdir/$command_name"
-  install_downloaded_binary "$tmpdir/$command_name" "$command_name"
-  rm -rf "$tmpdir"
+install_brew_packages() {
+  log "Installing packages via brew: $*"
+  brew install "$@"
 }
 
 detect_os() {
@@ -120,165 +78,11 @@ ensure_homebrew() {
     sudo -v || die "Administrator access is required to install Homebrew on macOS. Re-run this script from an admin account."
   fi
 
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-  if [[ -x /opt/homebrew/bin/brew ]]; then
-    eval "$(/opt/homebrew/bin/brew shellenv)"
-  elif [[ -x /usr/local/bin/brew ]]; then
-    eval "$(/usr/local/bin/brew shellenv)"
-  fi
+  eval_brew_shellenv
 
   have brew || die "Homebrew installation failed. Install it manually from https://brew.sh/ and re-run."
-}
-
-install_zellij_binary() {
-  local os arch target
-  os="$(detect_os)"
-  arch="$(uname -m)"
-
-  case "$os:$arch" in
-    debian:x86_64|debian:amd64)
-      target="x86_64-unknown-linux-musl"
-      ;;
-    debian:aarch64|debian:arm64)
-      target="aarch64-unknown-linux-musl"
-      ;;
-    macos:x86_64)
-      target="x86_64-apple-darwin"
-      ;;
-    macos:arm64|macos:aarch64)
-      target="aarch64-apple-darwin"
-      ;;
-    *)
-      warn "No prebuilt zellij binary mapping is available for $os/$arch in this script."
-      return 1
-      ;;
-  esac
-
-  install_release_tarball_binary "zellij" "zellij-org/zellij" "zellij-${target}.tar.gz" "zellij"
-}
-
-install_fzf_binary() {
-  local os arch target version
-  os="$(detect_os)"
-  arch="$(uname -m)"
-
-  case "$os:$arch" in
-    debian:x86_64|debian:amd64)
-      target="linux_amd64"
-      ;;
-    debian:aarch64|debian:arm64)
-      target="linux_arm64"
-      ;;
-    debian:armv7l)
-      target="linux_armv7"
-      ;;
-    debian:armv6l)
-      target="linux_armv6"
-      ;;
-    debian:armv5*)
-      target="linux_armv5"
-      ;;
-    debian:loongarch64)
-      target="linux_loong64"
-      ;;
-    debian:ppc64le)
-      target="linux_ppc64le"
-      ;;
-    debian:riscv64)
-      target="linux_riscv64"
-      ;;
-    debian:s390x)
-      target="linux_s390x"
-      ;;
-    *)
-      warn "No prebuilt fzf binary mapping is available for $os/$arch in this script."
-      return 1
-      ;;
-  esac
-
-  version="$(require_github_latest_release_version "fzf" "junegunn/fzf")"
-  install_release_tarball_binary "fzf" "junegunn/fzf" "fzf-${version}-${target}.tar.gz" "fzf"
-}
-
-install_lsd_binary() {
-  local os arch target version
-  os="$(detect_os)"
-  arch="$(uname -m)"
-
-  case "$os:$arch" in
-    debian:x86_64|debian:amd64)
-      target="x86_64-unknown-linux-gnu"
-      ;;
-    debian:aarch64|debian:arm64)
-      target="aarch64-unknown-linux-gnu"
-      ;;
-    debian:armv7l)
-      target="arm-unknown-linux-gnueabihf"
-      ;;
-    debian:i686|debian:i386)
-      target="i686-unknown-linux-gnu"
-      ;;
-    *)
-      warn "No prebuilt lsd binary mapping is available for $os/$arch in this script."
-      return 1
-      ;;
-  esac
-
-  version="$(require_github_latest_release_version "lsd" "lsd-rs/lsd")"
-  install_release_tarball_binary "lsd" "lsd-rs/lsd" "lsd-v${version}-${target}.tar.gz" "lsd-v${version}-${target}/lsd"
-}
-
-install_lazygit_binary() {
-  local os arch asset version
-  os="$(detect_os)"
-  arch="$(uname -m)"
-
-  case "$os:$arch" in
-    debian:x86_64|debian:amd64)
-      asset="Linux_x86_64.tar.gz"
-      ;;
-    debian:aarch64|debian:arm64)
-      asset="Linux_arm64.tar.gz"
-      ;;
-    macos:x86_64)
-      asset="Darwin_x86_64.tar.gz"
-      ;;
-    macos:arm64|macos:aarch64)
-      asset="Darwin_arm64.tar.gz"
-      ;;
-    *)
-      warn "No prebuilt lazygit binary mapping is available for $os/$arch in this script."
-      return 1
-      ;;
-  esac
-
-  version="$(require_github_latest_release_version "lazygit" "jesseduffield/lazygit")"
-  install_release_tarball_binary "lazygit" "jesseduffield/lazygit" "lazygit_${version}_${asset}" "lazygit"
-}
-
-install_jd_binary() {
-  local os arch asset
-  os="$(detect_os)"
-  arch="$(uname -m)"
-
-  case "$os:$arch" in
-    debian:x86_64|debian:amd64)
-      asset="jd-amd64-linux"
-      ;;
-    debian:aarch64|debian:arm64)
-      asset="jd-arm64-linux"
-      ;;
-    debian:riscv64)
-      asset="jd-riscv64-linux"
-      ;;
-    *)
-      warn "No prebuilt jd binary mapping is available for $os/$arch in this script."
-      return 1
-      ;;
-  esac
-
-  install_release_raw_binary "jd" "josephburnett/jd" "$asset"
 }
 
 install_packages() {
@@ -291,13 +95,13 @@ install_packages() {
       ensure_homebrew
       log "Installing packages via brew..."
       brew update
-      brew install git curl fzf gh jd lsd lazygit starship zellij || true
+      install_brew_packages git curl fzf gh jd lsd lazygit starship zellij
       brew install --cask ghostty || warn "Ghostty install failed; try manually: brew install --cask ghostty"
       ;;
     debian)
       log "Installing packages via apt..."
       sudo apt-get update -y
-      sudo apt-get install -y zsh git curl
+      sudo apt-get install -y zsh git curl build-essential procps file
       if apt-cache show gh >/dev/null 2>&1; then
         sudo apt-get install -y gh
       else
@@ -310,38 +114,38 @@ install_packages() {
         sudo apt-get update -y
         sudo apt-get install -y gh
       fi
-      warn "Installing fzf from the latest GitHub release at $FZF_RELEASES_URL because distro packages can lag behind upstream."
-      install_fzf_binary
-      warn "Installing lsd from the latest GitHub release at $LSD_RELEASES_URL because distro packages can lag behind upstream."
-      install_lsd_binary
-      if apt-cache show zellij >/dev/null 2>&1; then
-        sudo apt-get install -y zellij
+      ensure_homebrew
+      log "Refreshing Homebrew formulas..."
+      brew update
+      warn "Installing newer fzf and lsd builds via Homebrew instead of the stale distro packages."
+      install_brew_packages fzf lsd
+      if apt-cache show zellij >/dev/null 2>&1 && sudo apt-get install -y zellij; then
+        true
       else
-        warn "zellij is not available via apt on this system; falling back to the prebuilt binary."
-        install_zellij_binary
+        warn "zellij is not available via apt on this system; installing via Homebrew instead."
+        install_brew_packages zellij
       fi
-      # Prefer distro package if available; fall back to official installer
       if sudo apt-get install -y starship; then
         true
       else
-        warn "starship not available via apt on this system; installing via official script..."
-        curl -fsSL https://starship.rs/install.sh | sh -s -- -y
+        warn "starship is not available via apt on this system; installing via Homebrew instead."
+        install_brew_packages starship
       fi
-      if apt-cache show lazygit >/dev/null 2>&1; then
-        sudo apt-get install -y lazygit
+      if apt-cache show lazygit >/dev/null 2>&1 && sudo apt-get install -y lazygit; then
+        true
       else
-        warn "lazygit not available via apt on this system; following the official lazygit Debian/Ubuntu install path from $LAZYGIT_INSTALL_DOC_URL into /usr/local/bin"
-        install_lazygit_binary
+        warn "lazygit is not available via apt on this system; installing via Homebrew instead."
+        install_brew_packages lazygit
       fi
       if apt-cache show jd >/dev/null 2>&1 && sudo apt-get install -y jd; then
         true
       else
-        warn "jd is not available via apt on this system; installing from the latest official release binary..."
-        install_jd_binary
+        warn "jd is not available via apt on this system; installing via Homebrew instead."
+        install_brew_packages jd
       fi
       ;;
     *)
-      die "Unsupported OS. Please install zsh, git, curl, fzf, gh, jd, lsd, lazygit, starship, and zellij manually and re-run."
+      die "Unsupported OS. Please install zsh, git, curl, Homebrew, fzf, gh, jd, lsd, lazygit, starship, and zellij manually and re-run."
       ;;
   esac
 }
@@ -390,6 +194,23 @@ if [ -x /opt/homebrew/bin/brew ]; then
   eval "$(/opt/homebrew/bin/brew shellenv)"
 elif [ -x /usr/local/bin/brew ]; then
   eval "$(/usr/local/bin/brew shellenv)"
+elif [ -x /home/linuxbrew/.linuxbrew/bin/brew ]; then
+  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+elif [ -x "$HOME/.linuxbrew/bin/brew" ]; then
+  eval "$("$HOME/.linuxbrew/bin/brew" shellenv)"
+fi
+EOF
+  fi
+
+  if ! grep -qF '/home/linuxbrew/.linuxbrew/bin/brew' "$ZSHRC" && ! grep -qF '$HOME/.linuxbrew/bin/brew' "$ZSHRC"; then
+    log "Ensuring Linuxbrew is available in future zsh sessions..."
+    cat >> "$ZSHRC" <<'EOF'
+
+# Linuxbrew
+if [ -x /home/linuxbrew/.linuxbrew/bin/brew ]; then
+  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+elif [ -x "$HOME/.linuxbrew/bin/brew" ]; then
+  eval "$("$HOME/.linuxbrew/bin/brew" shellenv)"
 fi
 EOF
   fi
