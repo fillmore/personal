@@ -30,7 +30,7 @@ The script sets up:
   - `zsh-autocomplete`
   - `zsh-syntax-highlighting`
 - `Ghostty` on macOS
-- Ghostty theme defaults and appearance settings
+- Ghostty theme defaults, appearance settings, and `font-size = 14`
 - Starship preset: `catppuccin-powerline`
 
 ---

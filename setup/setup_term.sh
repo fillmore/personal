@@ -391,6 +391,7 @@ ensure_ghostty_config() {
     printf '\n# Ghostty theme and appearance\n' >> "$GHOSTTY_CONFIG_FILE"
   fi
 
+  upsert_ghostty_setting "font-size" "14"
   upsert_ghostty_setting "theme" "TokyoNight"
   upsert_ghostty_setting "background-opacity" "0.92"
   upsert_ghostty_setting "background-blur" "20"
