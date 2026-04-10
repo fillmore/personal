@@ -97,7 +97,7 @@ install_packages() {
       ensure_homebrew
       log "Installing packages via brew..."
       brew update
-      install_brew_packages git curl fzf gh jd jq lsd lazygit starship yq zellij
+      install_brew_packages git curl fzf gh jd jq lsd lazygit starship yq zellij btop
       brew install --cask ghostty || warn "Ghostty install failed; try manually: brew install --cask ghostty"
       ;;
     debian)
@@ -108,10 +108,10 @@ install_packages() {
       log "Refreshing Homebrew formulas..."
       brew update
       log "Installing CLI tools via Homebrew so versions stay consistent across platforms..."
-      install_brew_packages fzf gh jd jq lsd lazygit starship yq zellij
+      install_brew_packages fzf gh jd jq lsd lazygit starship yq zellij btop
       ;;
     *)
-      die "Unsupported OS. Please install zsh, git, curl, Homebrew, fzf, gh, jd, jq, lsd, lazygit, yq, starship, and zellij manually and re-run."
+      die "Unsupported OS. Please install zsh, git, curl, Homebrew, fzf, gh, jd, jq, lsd, lazygit, yq, starship, zellij, and btop manually and re-run."
       ;;
   esac
 }

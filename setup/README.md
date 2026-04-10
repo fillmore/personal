@@ -21,6 +21,7 @@ The script sets up:
 - `lazygit`
 - `lsd` (`ls` replacement)
 - `yq` (YAML processor)
+- `btop` system monitor
 - [`starship`](https://starship.rs/) prompt
 - [`zellij`](https://zellij.dev/)
 - Saved Zellij IDE layout: `zellij --layout ide`, `zjide`, or `zjide <session-name>`
@@ -65,7 +66,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/fillmore/personal/master
 Uses Homebrew:
 
 ```bash
-brew install gh jd jq fzf lsd lazygit starship yq zellij
+brew install gh jd jq fzf lsd lazygit starship yq zellij btop
 ```
 
 ### Debian / Ubuntu
@@ -75,7 +76,9 @@ The script installs the baseline system dependencies with `apt`, then uses Homeb
 brew install gh jd jq fzf lsd lazygit starship yq zellij
 ```
 
-That means `fzf`, `gh`, `jd`, `jq`, `lsd`, `lazygit`, `starship`, `yq`, and `zellij` all come from Homebrew on Debian/Ubuntu too.
+That means `fzf`, `gh`, `jd`, `jq`, `lsd`, `lazygit`, `starship`, `yq`, `zellij`, and `btop` all come from Homebrew on Debian/Ubuntu too.
+
+For `btop`, the script installs it via Homebrew so the version stays aligned with macOS.
 
 ---
 
