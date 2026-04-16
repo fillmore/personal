@@ -25,6 +25,7 @@ The script sets up:
 - [`starship`](https://starship.rs/) prompt
 - [`zellij`](https://zellij.dev/)
 - Saved Zellij IDE layout: `zellij --layout ide`, `zjide`, or `zjide <session-name>`
+- Zellij opens new panes with a login `zsh`, so aliases from login-shell setup also load there
 - [`oh-my-zsh`](https://ohmyz.sh/)
 - Zsh plugins:
   - `zsh-autosuggestions`
@@ -87,6 +88,8 @@ For `btop`, the script installs it via Homebrew so the version stays aligned wit
 - `~/.zshrc`
 - `~/.config/starship.toml`
 - `~/.config/zellij/layouts/ide.kdl`
+- `~/.config/zellij/config.kdl`
+- `~/.local/bin/zsh-login`
 - `~/.config/ghostty/config.ghostty` *(macOS only)*
 
 It also ensures `~/.local/bin` is on your `PATH` for user-local binaries when needed.
