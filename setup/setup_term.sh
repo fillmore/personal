@@ -8,6 +8,7 @@ ZSHRC="$HOME/.zshrc"
 STARSHIP_CONFIG_FILE="${STARSHIP_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/starship.toml}"
 ZELLIJ_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/zellij"
 ZELLIJ_LAYOUTS_DIR="$ZELLIJ_CONFIG_DIR/layouts"
+ZELLIJ_SHELL_WRAPPER="$HOME/.local/bin/zsh-login"
 GHOSTTY_CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/ghostty/config.ghostty"
 
 # Plugins
@@ -333,6 +334,38 @@ EOF
   log "Zellij IDE layout written to $ZELLIJ_LAYOUTS_DIR/ide.kdl"
 }
 
+ensure_zellij_login_shell() {
+  local zsh_path
+  local zellij_config_file="$ZELLIJ_CONFIG_DIR/config.kdl"
+
+  if [[ "$(detect_os)" == "macos" && -x /bin/zsh ]]; then
+    zsh_path="/bin/zsh"
+  else
+    zsh_path="$(command -v zsh || true)"
+  fi
+  [[ -n "$zsh_path" ]] || return
+
+  mkdir -p "$(dirname "$ZELLIJ_SHELL_WRAPPER")" "$ZELLIJ_CONFIG_DIR"
+
+  cat > "$ZELLIJ_SHELL_WRAPPER" <<EOF
+#!/usr/bin/env bash
+exec "$zsh_path" -l "\$@"
+EOF
+  chmod +x "$ZELLIJ_SHELL_WRAPPER"
+
+  [[ -f "$zellij_config_file" ]] || touch "$zellij_config_file"
+
+  if grep -qE '^[[:space:]]*default_shell[[:space:]]+' "$zellij_config_file"; then
+    perl -0pi -e 's|^[ \t]*default_shell[ \t]+.*$|default_shell "'"$ZELLIJ_SHELL_WRAPPER"'"|m' "$zellij_config_file"
+  elif grep -qE '^[[:space:]]*//[[:space:]]*default_shell[[:space:]]+' "$zellij_config_file"; then
+    perl -0pi -e 's|^[ \t]*//[ \t]*default_shell[ \t]+.*$|default_shell "'"$ZELLIJ_SHELL_WRAPPER"'"|m' "$zellij_config_file"
+  else
+    printf '\ndefault_shell "%s"\n' "$ZELLIJ_SHELL_WRAPPER" >> "$zellij_config_file"
+  fi
+
+  log "Configured Zellij to open new panes with login zsh."
+}
+
 ensure_zellij_alias() {
   [[ -f "$ZSHRC" ]] || touch "$ZSHRC"
 
@@ -453,6 +486,7 @@ main() {
 
   log "Configuring Zellij..."
   ensure_zellij_layout
+  ensure_zellij_login_shell
 
   log "Configuring Ghostty..."
   ensure_ghostty_config
