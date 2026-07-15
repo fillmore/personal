@@ -281,7 +281,7 @@ ensure_starship_config() {
   tmp="$(mktemp)"
 
   log "Setting Starship preset to catppuccin-powerline..."
-  starship preset catppuccin-powerline -o "$tmp"
+  starship preset catppuccin-powerline --force -o "$tmp"
 
   if grep -qE '^[[:space:]]*add_newline[[:space:]]*=' "$tmp"; then
     perl -0pi -e 's/^[ \t]*add_newline[ \t]*=.*/add_newline = true/m' "$tmp"
