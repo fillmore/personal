@@ -149,7 +149,11 @@ ensure_plugins_in_zshrc() {
   # Ensure ZSH is set (Oh My Zsh sets this, but keep safe)
   if ! grep -qE '^export ZSH=' "$ZSHRC" && ! grep -qE '^ZSH=' "$ZSHRC"; then
     warn "ZSH path not found in ~/.zshrc. Adding default."
-    printf '\nexport ZSH="$HOME/.oh-my-zsh"\n' >> "$ZSHRC"
+    if grep -qE '^[[:space:]]*plugins=\(' "$ZSHRC"; then
+      perl -0pi -e 's@(^[ \t]*plugins=\()@export ZSH="\$HOME/.oh-my-zsh"\n\n$1@m' "$ZSHRC"
+    else
+      printf '\nexport ZSH="$HOME/.oh-my-zsh"\n' >> "$ZSHRC"
+    fi
   fi
 
   if ! grep -qF 'brew shellenv' "$ZSHRC"; then
@@ -203,6 +207,14 @@ EOF
     log "No plugins=(...) line found. Adding one."
     printf '\nplugins=(git zsh-autosuggestions zsh-autocomplete zsh-syntax-highlighting)\n' >> "$ZSHRC"
   fi
+
+  if ! grep -qE '^[[:space:]]*(source|\.)[[:space:]]+.*oh-my-zsh\.sh' "$ZSHRC"; then
+    log "Ensuring Oh My Zsh is initialized in ~/.zshrc..."
+    perl -0pi -e 's@(^[ \t]*plugins=\((?:.|\n)*?\)[ \t]*(?:#[^\r\n]*)?)(\r?\n|\z)@$1$2\nsource "\$ZSH/oh-my-zsh.sh"\n@m' "$ZSHRC"
+  fi
+
+  grep -qE '^[[:space:]]*(source|\.)[[:space:]]+.*oh-my-zsh\.sh' "$ZSHRC" \
+    || die "Failed to add Oh My Zsh initialization to ~/.zshrc."
 
   # Ensure custom plugins are sourced from ~/.zshrc as well.
   if ! grep -qE 'zsh-autosuggestions(\.plugin)?\.zsh' "$ZSHRC"; then
