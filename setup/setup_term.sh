@@ -26,6 +26,216 @@ die() { printf "\n\033[1;31m==>\033[0m %s\n" "$*"; exit 1; }
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+UI_INTERACTIVE=0
+UI_CURRENT_PHASE=""
+declare -a UI_PHASES=()
+declare -a UI_PHASE_STATES=()
+declare -a UI_LOG_LINES=()
+UI_LOG_LIMIT=8
+
+ui_phase_index() {
+  local phase="$1"
+  local idx
+
+  for ((idx = 0; idx < ${#UI_PHASES[@]}; idx++)); do
+    if [[ "${UI_PHASES[$idx]}" == "$phase" ]]; then
+      printf '%s' "$idx"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+ui_phase_state() {
+  local phase="$1"
+  local idx
+  idx="$(ui_phase_index "$phase")" || return 1
+  printf '%s' "${UI_PHASE_STATES[$idx]:-pending}"
+}
+
+ui_set_phase_state() {
+  local phase="$1"
+  local state="$2"
+  local idx
+  idx="$(ui_phase_index "$phase")" || return 1
+  UI_PHASE_STATES[$idx]="$state"
+}
+
+ui_is_interactive() {
+  [[ -t 1 ]] \
+    && [[ -n "${TERM:-}" ]] \
+    && [[ "${TERM:-}" != "dumb" ]] \
+    && [[ -z "${CI:-}" ]]
+}
+
+ui_status_marker() {
+  local state="${1:-pending}"
+  case "$state" in
+    done) printf '\033[32m✓\033[0m' ;;
+    running) printf '\033[36m→\033[0m' ;;
+    failed) printf '\033[31m✗\033[0m' ;;
+    *) printf '\033[33m·\033[0m' ;;
+  esac
+}
+
+ui_phase_color() {
+  local state="${1:-pending}"
+  case "$state" in
+    done) printf '\033[32m' ;;
+    running) printf '\033[36m' ;;
+    failed) printf '\033[31m' ;;
+    *) printf '\033[33m' ;;
+  esac
+}
+
+ui_init() {
+  if ! ui_is_interactive; then
+    return 1
+  fi
+
+  UI_INTERACTIVE=1
+  UI_PHASES=(
+    "Installing prerequisites"
+    "Installing Oh My Zsh"
+    "Installing plugins"
+    "Updating ~/.zshrc"
+    "Configuring Starship"
+    "Configuring Zellij"
+    "Configuring Ghostty"
+  )
+
+  UI_PHASE_STATES=()
+  for phase in "${UI_PHASES[@]}"; do
+    UI_PHASE_STATES+=("pending")
+  done
+
+  trap 'ui_cleanup' EXIT
+  printf '\033[?25l'
+  ui_render
+}
+
+ui_cleanup() {
+  if [[ "$UI_INTERACTIVE" -eq 1 ]]; then
+    printf '\033[0m'
+    printf '\033[?25h'
+    printf '\n'
+  fi
+}
+
+ui_render() {
+  [[ "$UI_INTERACTIVE" -eq 1 ]] || return
+
+  local total="${#UI_PHASES[@]}"
+  local done=0
+  local phase state marker idx
+
+  for phase in "${UI_PHASES[@]}"; do
+    state="$(ui_phase_state "$phase")"
+    if [[ "$state" == "done" ]]; then
+      ((done += 1))
+    fi
+  done
+
+  printf '\033[2J\033[H'
+  printf '\033[1;36msetup_term.sh\033[0m\n'
+  printf 'Progress: [%d/%d]\n' "$done" "$total"
+  printf '========================================\n'
+
+  for phase in "${UI_PHASES[@]}"; do
+    state="$(ui_phase_state "$phase")"
+    marker="$(ui_status_marker "$state")"
+    printf '  %s %s%s\033[0m\n' "$marker" "$(ui_phase_color "$state")" "$phase"
+  done
+
+  printf '========================================\n'
+  printf 'Recent output:\n'
+  if (( ${#UI_LOG_LINES[@]} == 0 )); then
+    printf '  waiting for task output...\n'
+  else
+    local line
+    for line in "${UI_LOG_LINES[@]}"; do
+      printf '  %s\n' "${line:0:80}"
+    done
+  fi
+
+  printf '\n'
+  printf 'Current: %s\n' "${UI_CURRENT_PHASE:-idle}"
+  printf '========================================\n'
+}
+
+ui_store_log_excerpt() {
+  local log_file="$1"
+  local line
+
+  UI_LOG_LINES=()
+
+  if [[ ! -f "$log_file" ]]; then
+    UI_LOG_LINES+=("waiting for output...")
+    return
+  fi
+
+  while IFS= read -r line; do
+    line="${line//$'\r'/}"
+    if [[ -n "${line//[[:space:]]/}" ]]; then
+      UI_LOG_LINES+=("${line:0:80}")
+    fi
+  done < <(tail -n "$UI_LOG_LIMIT" "$log_file")
+
+  if (( ${#UI_LOG_LINES[@]} == 0 )); then
+    UI_LOG_LINES+=("waiting for output...")
+  fi
+}
+
+ui_run_step() {
+  local phase="$1"
+  shift
+  local log_file
+  local pid
+  local rc
+
+  UI_CURRENT_PHASE="$phase"
+  ui_set_phase_state "$phase" "running"
+  ui_render
+
+  log_file="$(mktemp)"
+  "$@" >"$log_file" 2>&1 &
+  pid=$!
+
+  while kill -0 "$pid" 2>/dev/null; do
+    ui_store_log_excerpt "$log_file"
+    ui_render
+    sleep 0.15
+  done
+
+  wait "$pid"
+  rc=$?
+
+  if [[ "$rc" -eq 0 ]]; then
+    ui_set_phase_state "$phase" "done"
+  else
+    ui_set_phase_state "$phase" "failed"
+  fi
+
+  ui_store_log_excerpt "$log_file"
+  rm -f "$log_file"
+
+  ui_render
+  return "$rc"
+}
+
+run_step_or_plain() {
+  local phase="$1"
+  shift
+
+  if (( UI_INTERACTIVE )); then
+    ui_run_step "$phase" "$@"
+  else
+    log "$phase"
+    "$@"
+  fi
+}
+
 eval_brew_shellenv() {
   if [[ -x /opt/homebrew/bin/brew ]]; then
     eval "$(/opt/homebrew/bin/brew shellenv)"
@@ -410,6 +620,31 @@ zjide() {
 EOF
 }
 
+install_plugins() {
+  git_clone_or_update "$AUTOSUGGEST_REPO" "$AUTOSUGGEST_DIR"
+  git_clone_or_update "$AUTOCOMPLETE_REPO" "$AUTOCOMPLETE_DIR"
+  git_clone_or_update "$SYNTAX_HL_REPO" "$SYNTAX_HL_DIR"
+}
+
+configure_zsh_shell() {
+  ensure_plugins_in_zshrc
+  ensure_zellij_alias
+}
+
+configure_starship() {
+  ensure_starship_in_zshrc
+  ensure_starship_config
+}
+
+configure_zellij() {
+  ensure_zellij_layout
+  ensure_zellij_login_shell
+}
+
+configure_ghostty() {
+  ensure_ghostty_config
+}
+
 upsert_ghostty_setting() {
   local key="$1"
   local value="$2"
@@ -479,31 +714,31 @@ offer_set_default_shell() {
 }
 
 main() {
-  log "Installing prerequisites..."
-  install_packages
+  ui_init || true
 
-  log "Installing Oh My Zsh..."
-  install_oh_my_zsh
+  run_step_or_plain "Installing prerequisites" install_packages || die "Prerequisite installation failed."
+  run_step_or_plain "Installing Oh My Zsh" install_oh_my_zsh || die "Oh My Zsh installation failed."
+  run_step_or_plain "Installing plugins" install_plugins || die "Plugin installation failed."
+  run_step_or_plain "Updating ~/.zshrc" configure_zsh_shell || die "Shell configuration failed."
+  run_step_or_plain "Configuring Starship" configure_starship || die "Starship configuration failed."
+  run_step_or_plain "Configuring Zellij" configure_zellij || die "Zellij configuration failed."
+  run_step_or_plain "Configuring Ghostty" configure_ghostty || die "Ghostty configuration failed."
 
-  log "Installing/Updating plugins..."
-  git_clone_or_update "$AUTOSUGGEST_REPO" "$AUTOSUGGEST_DIR"
-  git_clone_or_update "$AUTOCOMPLETE_REPO" "$AUTOCOMPLETE_DIR"
-  git_clone_or_update "$SYNTAX_HL_REPO" "$SYNTAX_HL_DIR"
+  if (( UI_INTERACTIVE )); then
+    UI_CURRENT_PHASE="Complete"
+    ui_set_phase_state "Installing prerequisites" "done"
+    ui_set_phase_state "Installing Oh My Zsh" "done"
+    ui_set_phase_state "Installing plugins" "done"
+    ui_set_phase_state "Updating ~/.zshrc" "done"
+    ui_set_phase_state "Configuring Starship" "done"
+    ui_set_phase_state "Configuring Zellij" "done"
+    ui_set_phase_state "Configuring Ghostty" "done"
+    UI_LOG_LINES=("Setup complete. Start a new terminal or run: exec zsh")
+    ui_render
+  else
+    log "Done."
+  fi
 
-  log "Updating ~/.zshrc..."
-  ensure_plugins_in_zshrc
-  ensure_starship_in_zshrc
-  ensure_starship_config
-  ensure_zellij_alias
-
-  log "Configuring Zellij..."
-  ensure_zellij_layout
-  ensure_zellij_login_shell
-
-  log "Configuring Ghostty..."
-  ensure_ghostty_config
-
-  log "Done."
   echo "Next: start a new terminal, or run: exec zsh"
   offer_set_default_shell
 }
