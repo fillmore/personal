@@ -94,20 +94,35 @@ ui_phase_color() {
   esac
 }
 
+ui_read_tty_size() {
+  have stty || return 1
+  [[ -r /dev/tty ]] || return 1
+  stty size < /dev/tty 2>/dev/null
+}
+
 ui_update_dimensions() {
   local columns=""
   local rows=""
   local fixed_rows
+  local tty_size=""
 
-  if have tput; then
+  tty_size="$(ui_read_tty_size || true)"
+  if [[ "$tty_size" =~ ^[[:space:]]*[0-9]+[[:space:]]+[0-9]+[[:space:]]*$ ]]; then
+    read -r rows columns <<< "$tty_size"
+  fi
+
+  if ! [[ "$columns" =~ ^[1-9][0-9]*$ ]] && have tput; then
     columns="$(tput cols 2>/dev/null || true)"
+  fi
+
+  if ! [[ "$rows" =~ ^[1-9][0-9]*$ ]] && have tput; then
     rows="$(tput lines 2>/dev/null || true)"
   fi
 
-  [[ "$columns" =~ ^[0-9]+$ ]] || columns="${COLUMNS:-80}"
-  [[ "$rows" =~ ^[0-9]+$ ]] || rows="${LINES:-24}"
-  [[ "$columns" =~ ^[0-9]+$ ]] || columns=80
-  [[ "$rows" =~ ^[0-9]+$ ]] || rows=24
+  [[ "$columns" =~ ^[1-9][0-9]*$ ]] || columns="${COLUMNS:-80}"
+  [[ "$rows" =~ ^[1-9][0-9]*$ ]] || rows="${LINES:-24}"
+  [[ "$columns" =~ ^[1-9][0-9]*$ ]] || columns=80
+  [[ "$rows" =~ ^[1-9][0-9]*$ ]] || rows=24
 
   (( columns < 4 )) && columns=4
   (( rows < 1 )) && rows=1

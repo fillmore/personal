@@ -54,13 +54,15 @@ When interactive mode is active, the script clears the terminal and redraws a co
 - recent output excerpt from the most recent step
 - current phase label
 
-The renderer reads the terminal dimensions with `tput` on each refresh. The
+The renderer reads the live controlling-terminal dimensions with
+`stty size < /dev/tty` on each refresh. It falls back to `tput`, then the
+`COLUMNS` and `LINES` shell values, if the controlling TTY is unavailable. The
 outer border and log width expand to the available columns, while the number
 of log rows uses and pads the remaining terminal height after the fixed status
 rows. Every rendered row is enclosed in an ASCII frame, with horizontal
 dividers between the header, phase list, and live output. One terminal row
-remains unused to avoid scrolling on the final newline. It falls back to 80
-columns by 24 rows when terminal dimensions are unavailable.
+remains unused to avoid scrolling on the final newline. The final fallback is
+80 columns by 24 rows.
 
 A small ASCII/Unicode status marker keeps the UI readable in most terminals, and each state uses a different ANSI color:
 
