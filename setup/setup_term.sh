@@ -32,6 +32,10 @@ declare -a UI_PHASES=()
 declare -a UI_PHASE_STATES=()
 declare -a UI_LOG_LINES=()
 UI_LOG_LIMIT=8
+UI_WIDTH=79
+UI_HEIGHT=24
+UI_LOG_WIDTH=77
+UI_SEPARATOR="========================================"
 
 ui_phase_index() {
   local phase="$1"
@@ -89,6 +93,37 @@ ui_phase_color() {
   esac
 }
 
+ui_update_dimensions() {
+  local columns=""
+  local rows=""
+  local fixed_rows
+
+  if have tput; then
+    columns="$(tput cols 2>/dev/null || true)"
+    rows="$(tput lines 2>/dev/null || true)"
+  fi
+
+  [[ "$columns" =~ ^[0-9]+$ ]] || columns="${COLUMNS:-80}"
+  [[ "$rows" =~ ^[0-9]+$ ]] || rows="${LINES:-24}"
+  [[ "$columns" =~ ^[0-9]+$ ]] || columns=80
+  [[ "$rows" =~ ^[0-9]+$ ]] || rows=24
+
+  (( columns < 4 )) && columns=4
+  (( rows < 1 )) && rows=1
+
+  UI_WIDTH=$((columns - 1))
+  UI_HEIGHT="$rows"
+  UI_LOG_WIDTH=$((UI_WIDTH - 2))
+  (( UI_LOG_WIDTH < 1 )) && UI_LOG_WIDTH=1
+
+  fixed_rows=$((8 + ${#UI_PHASES[@]}))
+  UI_LOG_LIMIT=$((UI_HEIGHT - fixed_rows - 1))
+  (( UI_LOG_LIMIT < 1 )) && UI_LOG_LIMIT=1
+
+  printf -v UI_SEPARATOR '%*s' "$UI_WIDTH" ''
+  UI_SEPARATOR="${UI_SEPARATOR// /=}"
+}
+
 ui_init() {
   if ! ui_is_interactive; then
     return 1
@@ -126,6 +161,8 @@ ui_cleanup() {
 ui_render() {
   [[ "$UI_INTERACTIVE" -eq 1 ]] || return
 
+  ui_update_dimensions
+
   local total="${#UI_PHASES[@]}"
   local done=0
   local phase state marker idx
@@ -140,7 +177,7 @@ ui_render() {
   printf '\033[2J\033[H'
   printf '\033[1;36msetup_term.sh\033[0m\n'
   printf 'Progress: [%d/%d]\n' "$done" "$total"
-  printf '========================================\n'
+  printf '%s\n' "$UI_SEPARATOR"
 
   for phase in "${UI_PHASES[@]}"; do
     state="$(ui_phase_state "$phase")"
@@ -148,26 +185,30 @@ ui_render() {
     printf '  %s %s%s\033[0m\n' "$marker" "$(ui_phase_color "$state")" "$phase"
   done
 
-  printf '========================================\n'
+  printf '%s\n' "$UI_SEPARATOR"
   printf 'Recent output:\n'
-  if (( ${#UI_LOG_LINES[@]} == 0 )); then
-    printf '  waiting for task output...\n'
-  else
-    local line
-    for line in "${UI_LOG_LINES[@]}"; do
-      printf '  %s\n' "${line:0:80}"
-    done
-  fi
+  local line row
+  for ((row = 0; row < UI_LOG_LIMIT; row++)); do
+    if (( row < ${#UI_LOG_LINES[@]} )); then
+      line="${UI_LOG_LINES[$row]}"
+      printf '  %s\n' "${line:0:$UI_LOG_WIDTH}"
+    elif (( row == 0 )); then
+      printf '  waiting for task output...\n'
+    else
+      printf '\n'
+    fi
+  done
 
   printf '\n'
   printf 'Current: %s\n' "${UI_CURRENT_PHASE:-idle}"
-  printf '========================================\n'
+  printf '%s\n' "$UI_SEPARATOR"
 }
 
 ui_store_log_excerpt() {
   local log_file="$1"
   local line
 
+  ui_update_dimensions
   UI_LOG_LINES=()
 
   if [[ ! -f "$log_file" ]]; then
@@ -178,7 +219,7 @@ ui_store_log_excerpt() {
   while IFS= read -r line; do
     line="${line//$'\r'/}"
     if [[ -n "${line//[[:space:]]/}" ]]; then
-      UI_LOG_LINES+=("${line:0:80}")
+      UI_LOG_LINES+=("$line")
     fi
   done < <(tail -n "$UI_LOG_LIMIT" "$log_file")
 

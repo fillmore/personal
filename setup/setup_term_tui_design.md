@@ -54,6 +54,12 @@ When interactive mode is active, the script clears the terminal and redraws a co
 - recent output excerpt from the most recent step
 - current phase label
 
+The renderer reads the terminal dimensions with `tput` on each refresh. The
+separator and log width expand to the available columns, while the number of
+log rows uses and pads the remaining terminal height after the fixed status
+rows. One terminal row remains unused to avoid scrolling on the final newline.
+It falls back to 80 columns by 24 rows when terminal dimensions are unavailable.
+
 A small ASCII/Unicode status marker keeps the UI readable in most terminals, and each state uses a different ANSI color:
 
 - green for `done`
