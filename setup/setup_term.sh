@@ -34,8 +34,9 @@ declare -a UI_LOG_LINES=()
 UI_LOG_LIMIT=8
 UI_WIDTH=79
 UI_HEIGHT=24
-UI_LOG_WIDTH=77
-UI_SEPARATOR="========================================"
+UI_INNER_WIDTH=77
+UI_LOG_WIDTH=75
+UI_HORIZONTAL="-----------------------------------------------------------------------------"
 
 ui_phase_index() {
   local phase="$1"
@@ -76,10 +77,10 @@ ui_is_interactive() {
 ui_status_marker() {
   local state="${1:-pending}"
   case "$state" in
-    done) printf '\033[32m✓\033[0m' ;;
-    running) printf '\033[36m→\033[0m' ;;
-    failed) printf '\033[31m✗\033[0m' ;;
-    *) printf '\033[33m·\033[0m' ;;
+    done) printf '✓' ;;
+    running) printf '→' ;;
+    failed) printf '✗' ;;
+    *) printf '·' ;;
   esac
 }
 
@@ -113,15 +114,37 @@ ui_update_dimensions() {
 
   UI_WIDTH=$((columns - 1))
   UI_HEIGHT="$rows"
-  UI_LOG_WIDTH=$((UI_WIDTH - 2))
+  UI_INNER_WIDTH=$((UI_WIDTH - 2))
+  (( UI_INNER_WIDTH < 1 )) && UI_INNER_WIDTH=1
+  UI_LOG_WIDTH=$((UI_INNER_WIDTH - 2))
   (( UI_LOG_WIDTH < 1 )) && UI_LOG_WIDTH=1
 
-  fixed_rows=$((8 + ${#UI_PHASES[@]}))
+  fixed_rows=$((9 + ${#UI_PHASES[@]}))
   UI_LOG_LIMIT=$((UI_HEIGHT - fixed_rows - 1))
   (( UI_LOG_LIMIT < 1 )) && UI_LOG_LIMIT=1
 
-  printf -v UI_SEPARATOR '%*s' "$UI_WIDTH" ''
-  UI_SEPARATOR="${UI_SEPARATOR// /=}"
+  printf -v UI_HORIZONTAL '%*s' "$UI_INNER_WIDTH" ''
+  UI_HORIZONTAL="${UI_HORIZONTAL// /-}"
+}
+
+ui_print_border() {
+  printf '+%s+\n' "$UI_HORIZONTAL"
+}
+
+ui_print_row() {
+  local plain="$1"
+  local rendered="${2:-$1}"
+  local visible_length="${#plain}"
+  local padding
+
+  if (( visible_length > UI_INNER_WIDTH )); then
+    plain="${plain:0:$UI_INNER_WIDTH}"
+    rendered="$plain"
+    visible_length="${#plain}"
+  fi
+
+  padding=$((UI_INNER_WIDTH - visible_length))
+  printf '|%s%*s|\n' "$rendered" "$padding" ''
 }
 
 ui_init() {
@@ -175,33 +198,35 @@ ui_render() {
   done
 
   printf '\033[2J\033[H'
-  printf '\033[1;36msetup_term.sh\033[0m\n'
-  printf 'Progress: [%d/%d]\n' "$done" "$total"
-  printf '%s\n' "$UI_SEPARATOR"
+  ui_print_border
+  ui_print_row "setup_term.sh" $'\033[1;36msetup_term.sh\033[0m'
+  ui_print_row "Progress: [$done/$total]"
+  ui_print_border
 
   for phase in "${UI_PHASES[@]}"; do
     state="$(ui_phase_state "$phase")"
     marker="$(ui_status_marker "$state")"
-    printf '  %s %s%s\033[0m\n' "$marker" "$(ui_phase_color "$state")" "$phase"
+    ui_print_row "  $marker $phase" \
+      "  $(ui_phase_color "$state")$marker $phase"$'\033[0m'
   done
 
-  printf '%s\n' "$UI_SEPARATOR"
-  printf 'Recent output:\n'
+  ui_print_border
+  ui_print_row "Recent output:"
   local line row
   for ((row = 0; row < UI_LOG_LIMIT; row++)); do
     if (( row < ${#UI_LOG_LINES[@]} )); then
       line="${UI_LOG_LINES[$row]}"
-      printf '  %s\n' "${line:0:$UI_LOG_WIDTH}"
+      ui_print_row "  ${line:0:$UI_LOG_WIDTH}"
     elif (( row == 0 )); then
-      printf '  waiting for task output...\n'
+      ui_print_row "  waiting for task output..."
     else
-      printf '\n'
+      ui_print_row ""
     fi
   done
 
-  printf '\n'
-  printf 'Current: %s\n' "${UI_CURRENT_PHASE:-idle}"
-  printf '%s\n' "$UI_SEPARATOR"
+  ui_print_row ""
+  ui_print_row "Current: ${UI_CURRENT_PHASE:-idle}"
+  ui_print_border
 }
 
 ui_store_log_excerpt() {
