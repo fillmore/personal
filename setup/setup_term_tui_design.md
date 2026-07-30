@@ -64,6 +64,17 @@ dividers between the header, phase list, and live output. One terminal row
 remains unused to avoid scrolling on the final newline. The final fallback is
 80 columns by 24 rows.
 
+The TUI enters the alternate screen buffer and draws the complete frame once.
+Later refreshes build the next frame in memory, compare each row with the
+previous frame, and reposition the cursor to repaint only changed rows. An
+unchanged frame writes nothing. A terminal resize invalidates the saved frame
+and causes one full redraw at the new dimensions.
+
+After all phases complete, the final frame remains visible with a
+`press any key to continue` status. The script restores the original screen
+only after the user presses a key, then prints the normal completion message
+and continues to the default-shell prompt.
+
 A small ASCII/Unicode status marker keeps the UI readable in most terminals, and each state uses a different ANSI color:
 
 - green for `done`
@@ -81,6 +92,7 @@ The script introduces a small wrapper that runs a phase function under a capture
 - render the screen
 - execute the phase in the background
 - stream the current tail of stdout/stderr into the UI while the step is active
+- repaint only rows whose content changed
 - mark the phase `done` or `failed`
 - show the final tail of the captured output in the UI
 - render again
@@ -97,6 +109,7 @@ If a phase fails:
 
 - the phase is marked failed in the UI
 - the captured log tail remains visible
+- the alternate screen and hidden cursor state are restored
 - the script exits with the existing `die` messaging to preserve current failure semantics
 
 ### 7. Implementation strategy
@@ -104,8 +117,10 @@ If a phase fails:
 The script uses a tiny internal abstraction:
 
 - `ui_init()`
+- `ui_build_frame()`
 - `ui_render()`
 - `ui_run_step()`
+- `ui_cleanup()`
 - `run_step_or_plain()`
 
 This lets the script share one code path for both TTY and non-TTY execution while only adding UI behavior when interactive mode is available.
