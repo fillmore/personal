@@ -22,7 +22,13 @@ AUTOCOMPLETE_DIR="$PLUGINS_DIR/zsh-autocomplete"
 
 log() { printf "\n\033[1;32m==>\033[0m %s\n" "$*"; }
 warn() { printf "\n\033[1;33m==>\033[0m %s\n" "$*"; }
-die() { printf "\n\033[1;31m==>\033[0m %s\n" "$*"; exit 1; }
+die() {
+  if [[ "${UI_INTERACTIVE:-0}" -eq 1 ]]; then
+    ui_cleanup
+  fi
+  printf "\n\033[1;31m==>\033[0m %s\n" "$*"
+  exit 1
+}
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
@@ -31,12 +37,18 @@ UI_CURRENT_PHASE=""
 declare -a UI_PHASES=()
 declare -a UI_PHASE_STATES=()
 declare -a UI_LOG_LINES=()
+declare -a UI_FRAME_LINES=()
+declare -a UI_PREVIOUS_FRAME_LINES=()
 UI_LOG_LIMIT=8
 UI_WIDTH=79
 UI_HEIGHT=24
 UI_INNER_WIDTH=77
 UI_LOG_WIDTH=75
 UI_HORIZONTAL="-----------------------------------------------------------------------------"
+UI_RENDER_INITIALIZED=0
+UI_RENDER_WIDTH=0
+UI_RENDER_HEIGHT=0
+UI_CLEANED_UP=0
 
 ui_phase_index() {
   local phase="$1"
@@ -142,15 +154,16 @@ ui_update_dimensions() {
   UI_HORIZONTAL="${UI_HORIZONTAL// /-}"
 }
 
-ui_print_border() {
-  printf '+%s+\n' "$UI_HORIZONTAL"
+ui_frame_add_border() {
+  UI_FRAME_LINES+=("+$UI_HORIZONTAL+")
 }
 
-ui_print_row() {
+ui_frame_add_row() {
   local plain="$1"
   local rendered="${2:-$1}"
   local visible_length="${#plain}"
   local padding
+  local padding_text=""
 
   if (( visible_length > UI_INNER_WIDTH )); then
     plain="${plain:0:$UI_INNER_WIDTH}"
@@ -159,7 +172,90 @@ ui_print_row() {
   fi
 
   padding=$((UI_INNER_WIDTH - visible_length))
-  printf '|%s%*s|\n' "$rendered" "$padding" ''
+  printf -v padding_text '%*s' "$padding" ''
+  UI_FRAME_LINES+=("|${rendered}${padding_text}|")
+}
+
+ui_build_frame() {
+  local total="${#UI_PHASES[@]}"
+  local done=0
+  local phase state marker
+  local line row
+
+  ui_update_dimensions
+  UI_FRAME_LINES=()
+
+  for phase in "${UI_PHASES[@]}"; do
+    state="$(ui_phase_state "$phase")"
+    if [[ "$state" == "done" ]]; then
+      ((done += 1))
+    fi
+  done
+
+  ui_frame_add_border
+  ui_frame_add_row "setup_term.sh" $'\033[1;36msetup_term.sh\033[0m'
+  ui_frame_add_row "Progress: [$done/$total]"
+  ui_frame_add_border
+
+  for phase in "${UI_PHASES[@]}"; do
+    state="$(ui_phase_state "$phase")"
+    marker="$(ui_status_marker "$state")"
+    ui_frame_add_row "  $marker $phase" \
+      "  $(ui_phase_color "$state")$marker $phase"$'\033[0m'
+  done
+
+  ui_frame_add_border
+  ui_frame_add_row "Recent output:"
+  for ((row = 0; row < UI_LOG_LIMIT; row++)); do
+    if (( row < ${#UI_LOG_LINES[@]} )); then
+      line="${UI_LOG_LINES[$row]}"
+      ui_frame_add_row "  ${line:0:$UI_LOG_WIDTH}"
+    elif (( row == 0 )); then
+      ui_frame_add_row "  waiting for task output..."
+    else
+      ui_frame_add_row ""
+    fi
+  done
+
+  ui_frame_add_row ""
+  ui_frame_add_row "Current: ${UI_CURRENT_PHASE:-idle}"
+  ui_frame_add_border
+}
+
+ui_draw_full_frame() {
+  local idx
+
+  printf '\033[2J\033[H'
+  for ((idx = 0; idx < ${#UI_FRAME_LINES[@]}; idx++)); do
+    printf '\033[%d;1H\033[2K%s' "$((idx + 1))" "${UI_FRAME_LINES[$idx]}"
+  done
+
+  UI_RENDER_INITIALIZED=1
+}
+
+ui_draw_changed_rows() {
+  local current_count="${#UI_FRAME_LINES[@]}"
+  local previous_count="${#UI_PREVIOUS_FRAME_LINES[@]}"
+  local max_count="$current_count"
+  local idx current previous
+
+  if (( previous_count > max_count )); then
+    max_count="$previous_count"
+  fi
+
+  for ((idx = 0; idx < max_count; idx++)); do
+    current="${UI_FRAME_LINES[$idx]-}"
+    previous="${UI_PREVIOUS_FRAME_LINES[$idx]-}"
+    if [[ "$current" != "$previous" ]]; then
+      printf '\033[%d;1H\033[2K%s' "$((idx + 1))" "$current"
+    fi
+  done
+}
+
+ui_remember_frame() {
+  UI_PREVIOUS_FRAME_LINES=("${UI_FRAME_LINES[@]}")
+  UI_RENDER_WIDTH="$UI_WIDTH"
+  UI_RENDER_HEIGHT="$UI_HEIGHT"
 }
 
 ui_init() {
@@ -183,65 +279,57 @@ ui_init() {
     UI_PHASE_STATES+=("pending")
   done
 
+  UI_FRAME_LINES=()
+  UI_PREVIOUS_FRAME_LINES=()
+  UI_RENDER_INITIALIZED=0
+  UI_RENDER_WIDTH=0
+  UI_RENDER_HEIGHT=0
+  UI_CLEANED_UP=0
+
   trap 'ui_cleanup' EXIT
-  printf '\033[?25l'
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  trap 'exit 129' HUP
+  printf '\033[?1049h\033[?25l'
   ui_render
 }
 
 ui_cleanup() {
-  if [[ "$UI_INTERACTIVE" -eq 1 ]]; then
-    printf '\033[0m'
-    printf '\033[?25h'
-    printf '\n'
-  fi
+  [[ "$UI_INTERACTIVE" -eq 1 ]] || return 0
+  [[ "$UI_CLEANED_UP" -eq 0 ]] || return 0
+
+  UI_CLEANED_UP=1
+  UI_INTERACTIVE=0
+  printf '\033[0m\033[?25h\033[?1049l'
+}
+
+ui_read_key() {
+  [[ -r /dev/tty ]] || return 1
+  IFS= read -r -n 1 -s < /dev/tty
+}
+
+ui_wait_for_key() {
+  [[ "$UI_INTERACTIVE" -eq 1 ]] || return 0
+
+  UI_CURRENT_PHASE="Complete - press any key to continue"
+  ui_render
+  ui_read_key || true
 }
 
 ui_render() {
-  [[ "$UI_INTERACTIVE" -eq 1 ]] || return
+  [[ "$UI_INTERACTIVE" -eq 1 ]] || return 0
 
-  ui_update_dimensions
+  ui_build_frame
 
-  local total="${#UI_PHASES[@]}"
-  local done=0
-  local phase state marker idx
+  if (( ! UI_RENDER_INITIALIZED )) \
+    || (( UI_WIDTH != UI_RENDER_WIDTH )) \
+    || (( UI_HEIGHT != UI_RENDER_HEIGHT )); then
+    ui_draw_full_frame
+  else
+    ui_draw_changed_rows
+  fi
 
-  for phase in "${UI_PHASES[@]}"; do
-    state="$(ui_phase_state "$phase")"
-    if [[ "$state" == "done" ]]; then
-      ((done += 1))
-    fi
-  done
-
-  printf '\033[2J\033[H'
-  ui_print_border
-  ui_print_row "setup_term.sh" $'\033[1;36msetup_term.sh\033[0m'
-  ui_print_row "Progress: [$done/$total]"
-  ui_print_border
-
-  for phase in "${UI_PHASES[@]}"; do
-    state="$(ui_phase_state "$phase")"
-    marker="$(ui_status_marker "$state")"
-    ui_print_row "  $marker $phase" \
-      "  $(ui_phase_color "$state")$marker $phase"$'\033[0m'
-  done
-
-  ui_print_border
-  ui_print_row "Recent output:"
-  local line row
-  for ((row = 0; row < UI_LOG_LIMIT; row++)); do
-    if (( row < ${#UI_LOG_LINES[@]} )); then
-      line="${UI_LOG_LINES[$row]}"
-      ui_print_row "  ${line:0:$UI_LOG_WIDTH}"
-    elif (( row == 0 )); then
-      ui_print_row "  waiting for task output..."
-    else
-      ui_print_row ""
-    fi
-  done
-
-  ui_print_row ""
-  ui_print_row "Current: ${UI_CURRENT_PHASE:-idle}"
-  ui_print_border
+  ui_remember_frame
 }
 
 ui_store_log_excerpt() {
@@ -815,11 +903,11 @@ main() {
     ui_set_phase_state "Configuring Zellij" "done"
     ui_set_phase_state "Configuring Ghostty" "done"
     UI_LOG_LINES=("Setup complete. Start a new terminal or run: exec zsh")
-    ui_render
-  else
-    log "Done."
+    ui_wait_for_key
+    ui_cleanup
   fi
 
+  log "Done."
   echo "Next: start a new terminal, or run: exec zsh"
   offer_set_default_shell
 }
