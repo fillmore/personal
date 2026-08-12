@@ -342,6 +342,29 @@ ui_redact_password_prompt() {
   printf '%s' "[password prompt hidden]"
 }
 
+ui_read_tty_secret() {
+  local secret=""
+
+  [[ -r /dev/tty ]] || return 1
+  IFS= read -r -s secret < /dev/tty || return 1
+  printf '\n' > /dev/tty
+  printf '%s' "$secret"
+}
+
+run_sudo() {
+  local password=""
+
+  if (( UI_INTERACTIVE )); then
+    UI_CURRENT_PHASE="Waiting for password..."
+    ui_render
+    password="$(ui_read_tty_secret)" || return 1
+    printf '%s\n' "$password" | sudo -S -p '' "$@"
+    return
+  fi
+
+  sudo "$@"
+}
+
 ui_store_log_excerpt() {
   local log_file="$1"
   local line
@@ -471,7 +494,7 @@ ensure_homebrew() {
 
   if [[ "$(detect_os)" == "macos" ]]; then
     log "Homebrew may prompt for your macOS administrator password..."
-    sudo -v || die "Administrator access is required to install Homebrew on macOS. Re-run this script from an admin account."
+    run_sudo -v || die "Administrator access is required to install Homebrew on macOS. Re-run this script from an admin account."
   fi
 
   NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -496,8 +519,8 @@ install_packages() {
       ;;
     debian)
       log "Installing packages via apt..."
-      sudo apt-get update -y
-      sudo apt-get install -y zsh git curl build-essential procps file
+      run_sudo apt-get update -y
+      run_sudo apt-get install -y zsh git curl build-essential procps file
       ensure_homebrew
       log "Refreshing Homebrew formulas..."
       brew update
@@ -887,7 +910,7 @@ offer_set_default_shell() {
     if [[ "$(detect_os)" == "macos" ]]; then
       if ! grep -qF "$zsh_path" /etc/shells; then
         warn "$zsh_path not found in /etc/shells; adding it (requires sudo)."
-        echo "$zsh_path" | sudo tee -a /etc/shells >/dev/null
+        printf '%s\n' "$zsh_path" | run_sudo tee -a /etc/shells >/dev/null
       fi
     fi
     chsh -s "$zsh_path" || warn "chsh failed. You may need to run it manually: chsh -s $zsh_path"
