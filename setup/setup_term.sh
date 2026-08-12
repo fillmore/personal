@@ -332,6 +332,33 @@ ui_render() {
   ui_remember_frame
 }
 
+ui_is_password_prompt() {
+  local line="${1:-}"
+
+  [[ "$line" =~ (^|[[:space:]])[Pp]assword ]] \
+    || [[ "$line" =~ (^|[[:space:]])[Pp]assphrase ]] \
+    || [[ "$line" =~ (^|[[:space:]])[Ss]udo.*[Pp]assword ]]
+}
+
+ui_redact_password_prompt() {
+  local line="$1"
+  local prefix
+
+  if [[ "$line" =~ ^(.*[Pp]assword.*:)[[:space:]]*.*$ ]]; then
+    prefix="${BASH_REMATCH[1]}"
+    printf '%s [hidden]' "$prefix"
+    return 0
+  fi
+
+  if [[ "$line" =~ ^(.*[Pp]assphrase.*:)[[:space:]]*.*$ ]]; then
+    prefix="${BASH_REMATCH[1]}"
+    printf '%s [hidden]' "$prefix"
+    return 0
+  fi
+
+  printf '%s' "$line"
+}
+
 ui_store_log_excerpt() {
   local log_file="$1"
   local line
@@ -347,6 +374,10 @@ ui_store_log_excerpt() {
   while IFS= read -r line; do
     line="${line//$'\r'/}"
     if [[ -n "${line//[[:space:]]/}" ]]; then
+      if ui_is_password_prompt "$line"; then
+        UI_CURRENT_PHASE="Waiting for password..."
+        line="$(ui_redact_password_prompt "$line")"
+      fi
       UI_LOG_LINES+=("$line")
     fi
   done < <(tail -n "$UI_LOG_LIMIT" "$log_file")
