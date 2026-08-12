@@ -335,28 +335,11 @@ ui_render() {
 ui_is_password_prompt() {
   local line="${1:-}"
 
-  [[ "$line" =~ (^|[[:space:]])[Pp]assword ]] \
-    || [[ "$line" =~ (^|[[:space:]])[Pp]assphrase ]] \
-    || [[ "$line" =~ (^|[[:space:]])[Ss]udo.*[Pp]assword ]]
+  [[ "$line" =~ [Pp]assword ]] || [[ "$line" =~ [Pp]assphrase ]]
 }
 
 ui_redact_password_prompt() {
-  local line="$1"
-  local prefix
-
-  if [[ "$line" =~ ^(.*[Pp]assword.*:)[[:space:]]*.*$ ]]; then
-    prefix="${BASH_REMATCH[1]}"
-    printf '%s [hidden]' "$prefix"
-    return 0
-  fi
-
-  if [[ "$line" =~ ^(.*[Pp]assphrase.*:)[[:space:]]*.*$ ]]; then
-    prefix="${BASH_REMATCH[1]}"
-    printf '%s [hidden]' "$prefix"
-    return 0
-  fi
-
-  printf '%s' "$line"
+  printf '%s' "[password prompt hidden]"
 }
 
 ui_store_log_excerpt() {
@@ -376,7 +359,7 @@ ui_store_log_excerpt() {
     if [[ -n "${line//[[:space:]]/}" ]]; then
       if ui_is_password_prompt "$line"; then
         UI_CURRENT_PHASE="Waiting for password..."
-        line="$(ui_redact_password_prompt "$line")"
+        line="$(ui_redact_password_prompt)"
       fi
       UI_LOG_LINES+=("$line")
     fi
