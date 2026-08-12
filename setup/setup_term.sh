@@ -357,7 +357,9 @@ run_sudo() {
   if (( UI_INTERACTIVE )); then
     UI_CURRENT_PHASE="Waiting for password..."
     ui_render
-    password="$(ui_read_tty_secret)" || return 1
+    printf '\n\033[1;33m==>\033[0m Enter your sudo password to continue.\n' > /dev/tty
+    IFS= read -r -s password < /dev/tty || return 1
+    printf '\n' > /dev/tty
     printf '%s\n' "$password" | sudo -S -p '' "$@"
     return
   fi
