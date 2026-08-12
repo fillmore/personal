@@ -44,6 +44,7 @@ UI_WIDTH=79
 UI_HEIGHT=24
 UI_INNER_WIDTH=77
 UI_LOG_WIDTH=75
+UI_PROMPT_TEXT=""
 UI_HORIZONTAL="-----------------------------------------------------------------------------"
 UI_RENDER_INITIALIZED=0
 UI_RENDER_WIDTH=0
@@ -204,6 +205,11 @@ ui_build_frame() {
       "  $(ui_phase_color "$state")$marker $phase"$'\033[0m'
   done
 
+  if [[ -n "$UI_PROMPT_TEXT" ]]; then
+    ui_frame_add_row "Input required:"
+    ui_frame_add_row "  ${UI_PROMPT_TEXT:0:$UI_LOG_WIDTH}"
+  fi
+
   ui_frame_add_border
   ui_frame_add_row "Recent output:"
   for ((row = 0; row < UI_LOG_LIMIT; row++)); do
@@ -356,8 +362,6 @@ run_sudo() {
 
   if (( UI_INTERACTIVE )); then
     UI_CURRENT_PHASE="Waiting for password..."
-    ui_render
-    printf '\n\033[1;33m==>\033[0m Enter your sudo password to continue.\n' > /dev/tty
     IFS= read -r -s password < /dev/tty || return 1
     printf '\n' > /dev/tty
     printf '%s\n' "$password" | sudo -S -p '' "$@"
@@ -438,6 +442,25 @@ run_step_or_plain() {
 
   if (( UI_INTERACTIVE )); then
     ui_run_step "$phase" "$@"
+  else
+    log "$phase"
+    "$@"
+  fi
+}
+
+run_step_or_plain_with_prompt() {
+  local phase="$1"
+  local prompt="$2"
+  shift 2
+
+  UI_PROMPT_TEXT="$prompt"
+  if (( UI_INTERACTIVE )); then
+    ui_render
+    ui_run_step "$phase" "$@"
+    local rc=$?
+    UI_PROMPT_TEXT=""
+    ui_render
+    return "$rc"
   else
     log "$phase"
     "$@"
@@ -924,7 +947,7 @@ offer_set_default_shell() {
 main() {
   ui_init || true
 
-  run_step_or_plain "Installing prerequisites" install_packages || die "Prerequisite installation failed."
+  run_step_or_plain_with_prompt "Installing prerequisites" "Enter your sudo password to continue..." install_packages || die "Prerequisite installation failed."
   run_step_or_plain "Installing Oh My Zsh" install_oh_my_zsh || die "Oh My Zsh installation failed."
   run_step_or_plain "Installing plugins" install_plugins || die "Plugin installation failed."
   run_step_or_plain "Updating ~/.zshrc" configure_zsh_shell || die "Shell configuration failed."
