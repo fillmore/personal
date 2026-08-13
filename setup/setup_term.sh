@@ -206,12 +206,13 @@ ui_build_frame() {
   done
 
   if [[ -n "$UI_PROMPT_TEXT" ]]; then
+    ui_frame_add_border
     ui_frame_add_row "Input required:" $'\033[1;36mInput required:\033[0m'
     ui_frame_add_row "  ${UI_PROMPT_TEXT:0:$UI_LOG_WIDTH}" \
       $'\033[1;33m  '"${UI_PROMPT_TEXT:0:$UI_LOG_WIDTH}"$'\033[0m'
+    ui_frame_add_border
   fi
 
-  ui_frame_add_border
   ui_frame_add_row "Recent output:"
   for ((row = 0; row < UI_LOG_LIMIT; row++)); do
     if (( row < ${#UI_LOG_LINES[@]} )); then
