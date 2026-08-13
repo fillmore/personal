@@ -45,6 +45,8 @@ UI_HEIGHT=24
 UI_INNER_WIDTH=77
 UI_LOG_WIDTH=75
 UI_PROMPT_TEXT=""
+UI_PROMPT_REQUEST_FILE=""
+UI_PROMPT_ACK_FILE=""
 UI_HORIZONTAL="-----------------------------------------------------------------------------"
 UI_RENDER_INITIALIZED=0
 UI_RENDER_WIDTH=0
@@ -148,6 +150,9 @@ ui_update_dimensions() {
   (( UI_LOG_WIDTH < 1 )) && UI_LOG_WIDTH=1
 
   fixed_rows=$((9 + ${#UI_PHASES[@]}))
+  if [[ -n "$UI_PROMPT_TEXT" ]]; then
+    fixed_rows=$((fixed_rows + 3))
+  fi
   UI_LOG_LIMIT=$((UI_HEIGHT - fixed_rows - 1))
   (( UI_LOG_LIMIT < 1 )) && UI_LOG_LIMIT=1
 
@@ -205,11 +210,11 @@ ui_build_frame() {
       "  $(ui_phase_color "$state")$marker $phase"$'\033[0m'
   done
 
+  ui_frame_add_border
   if [[ -n "$UI_PROMPT_TEXT" ]]; then
-    ui_frame_add_border
     ui_frame_add_row "Input required:" $'\033[1;36mInput required:\033[0m'
     ui_frame_add_row "  ${UI_PROMPT_TEXT:0:$UI_LOG_WIDTH}" \
-      $'\033[1;33m  '"${UI_PROMPT_TEXT:0:$UI_LOG_WIDTH}"$'\033[0m'
+      $'\033[1;35m  '"${UI_PROMPT_TEXT:0:$UI_LOG_WIDTH}"$'\033[0m'
     ui_frame_add_border
   fi
 
@@ -293,6 +298,9 @@ ui_init() {
   UI_RENDER_WIDTH=0
   UI_RENDER_HEIGHT=0
   UI_CLEANED_UP=0
+  UI_PROMPT_TEXT=""
+  UI_PROMPT_REQUEST_FILE=""
+  UI_PROMPT_ACK_FILE=""
 
   trap 'ui_cleanup' EXIT
   trap 'exit 130' INT
@@ -308,6 +316,12 @@ ui_cleanup() {
 
   UI_CLEANED_UP=1
   UI_INTERACTIVE=0
+  if [[ -n "$UI_PROMPT_REQUEST_FILE" ]]; then
+    rm -f -- "$UI_PROMPT_REQUEST_FILE"
+  fi
+  if [[ -n "$UI_PROMPT_ACK_FILE" ]]; then
+    rm -f -- "$UI_PROMPT_ACK_FILE"
+  fi
   printf '\033[0m\033[?25h\033[?1049l'
 }
 
@@ -340,23 +354,46 @@ ui_render() {
   ui_remember_frame
 }
 
-ui_is_password_prompt() {
-  local line="${1:-}"
-
-  [[ "$line" =~ [Pp]assword ]] || [[ "$line" =~ [Pp]assphrase ]]
-}
-
-ui_redact_password_prompt() {
-  printf '%s' "[password prompt hidden]"
-}
-
 ui_read_tty_secret() {
   local secret=""
 
   [[ -r /dev/tty ]] || return 1
   IFS= read -r -s secret < /dev/tty || return 1
-  printf '\n' > /dev/tty
   printf '%s' "$secret"
+}
+
+ui_sync_prompt_state() {
+  local phase="$1"
+  local prompt=""
+
+  if [[ -n "$UI_PROMPT_REQUEST_FILE" && -s "$UI_PROMPT_REQUEST_FILE" ]]; then
+    IFS= read -r prompt < "$UI_PROMPT_REQUEST_FILE" || true
+  fi
+
+  if [[ -n "$prompt" ]]; then
+    UI_PROMPT_TEXT="$prompt"
+    UI_CURRENT_PHASE="Waiting for password..."
+  else
+    UI_PROMPT_TEXT=""
+    UI_CURRENT_PHASE="$phase"
+  fi
+}
+
+ui_acknowledge_prompt() {
+  if [[ -n "$UI_PROMPT_TEXT" && -n "$UI_PROMPT_ACK_FILE" ]]; then
+    : > "$UI_PROMPT_ACK_FILE"
+  fi
+}
+
+ui_wait_for_prompt_ack() {
+  local attempt
+
+  for ((attempt = 0; attempt < 100; attempt++)); do
+    [[ -f "$UI_PROMPT_ACK_FILE" ]] && return 0
+    sleep 0.05
+  done
+
+  return 1
 }
 
 run_sudo() {
@@ -364,22 +401,24 @@ run_sudo() {
 
   if (( UI_INTERACTIVE )); then
     if sudo -n -v >/dev/null 2>&1; then
+      sudo -n "$@"
+      return
+    fi
+
+    if [[ -z "$UI_PROMPT_REQUEST_FILE" || -z "$UI_PROMPT_ACK_FILE" ]]; then
       sudo "$@"
       return
     fi
 
-    UI_CURRENT_PHASE="Waiting for password..."
-    UI_PROMPT_TEXT="Enter sudo password"
-    ui_render
-    printf '\033[?25l' > /dev/tty
-    IFS= read -r -s password < /dev/tty || {
-      UI_PROMPT_TEXT=""
-      ui_render
+    rm -f -- "$UI_PROMPT_ACK_FILE"
+    printf '%s\n' "Enter sudo password" > "$UI_PROMPT_REQUEST_FILE"
+    ui_wait_for_prompt_ack || true
+
+    password="$(ui_read_tty_secret)" || {
+      : > "$UI_PROMPT_REQUEST_FILE"
       return 1
     }
-    printf '\n' > /dev/tty
-    UI_PROMPT_TEXT=""
-    ui_render
+    : > "$UI_PROMPT_REQUEST_FILE"
     printf '%s\n' "$password" | sudo -S -p '' "$@"
     return
   fi
@@ -402,10 +441,6 @@ ui_store_log_excerpt() {
   while IFS= read -r line; do
     line="${line//$'\r'/}"
     if [[ -n "${line//[[:space:]]/}" ]]; then
-      if ui_is_password_prompt "$line"; then
-        UI_CURRENT_PHASE="Waiting for password..."
-        line="$(ui_redact_password_prompt)"
-      fi
       UI_LOG_LINES+=("$line")
     fi
   done < <(tail -n "$UI_LOG_LIMIT" "$log_file")
@@ -419,6 +454,8 @@ ui_run_step() {
   local phase="$1"
   shift
   local log_file
+  local prompt_request_file
+  local prompt_ack_file
   local pid
   local rc
 
@@ -427,12 +464,19 @@ ui_run_step() {
   ui_render
 
   log_file="$(mktemp)"
+  prompt_request_file="$(mktemp)"
+  prompt_ack_file="$(mktemp)"
+  rm -f -- "$prompt_ack_file"
+  UI_PROMPT_REQUEST_FILE="$prompt_request_file"
+  UI_PROMPT_ACK_FILE="$prompt_ack_file"
   "$@" >"$log_file" 2>&1 &
   pid=$!
 
   while kill -0 "$pid" 2>/dev/null; do
     ui_store_log_excerpt "$log_file"
+    ui_sync_prompt_state "$phase"
     ui_render
+    ui_acknowledge_prompt
     sleep 0.15
   done
 
@@ -446,7 +490,11 @@ ui_run_step() {
   fi
 
   ui_store_log_excerpt "$log_file"
-  rm -f "$log_file"
+  UI_PROMPT_TEXT=""
+  UI_CURRENT_PHASE="$phase"
+  rm -f -- "$log_file" "$prompt_request_file" "$prompt_ack_file"
+  UI_PROMPT_REQUEST_FILE=""
+  UI_PROMPT_ACK_FILE=""
 
   ui_render
   return "$rc"
