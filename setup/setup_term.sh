@@ -362,8 +362,10 @@ run_sudo() {
 
   if (( UI_INTERACTIVE )); then
     UI_CURRENT_PHASE="Waiting for password..."
+    printf '\033[?25l' > /dev/tty
     IFS= read -r -s password < /dev/tty || return 1
     printf '\n' > /dev/tty
+    printf '\033[?25l' > /dev/tty
     printf '%s\n' "$password" | sudo -S -p '' "$@"
     return
   fi
