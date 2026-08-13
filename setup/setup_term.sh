@@ -44,6 +44,9 @@ UI_WIDTH=79
 UI_HEIGHT=24
 UI_INNER_WIDTH=77
 UI_LOG_WIDTH=75
+UI_PROMPT_TEXT=""
+UI_PROMPT_REQUEST_FILE=""
+UI_PROMPT_ACK_FILE=""
 UI_HORIZONTAL="-----------------------------------------------------------------------------"
 UI_RENDER_INITIALIZED=0
 UI_RENDER_WIDTH=0
@@ -147,6 +150,9 @@ ui_update_dimensions() {
   (( UI_LOG_WIDTH < 1 )) && UI_LOG_WIDTH=1
 
   fixed_rows=$((9 + ${#UI_PHASES[@]}))
+  if [[ -n "$UI_PROMPT_TEXT" ]]; then
+    fixed_rows=$((fixed_rows + 3))
+  fi
   UI_LOG_LIMIT=$((UI_HEIGHT - fixed_rows - 1))
   (( UI_LOG_LIMIT < 1 )) && UI_LOG_LIMIT=1
 
@@ -205,6 +211,13 @@ ui_build_frame() {
   done
 
   ui_frame_add_border
+  if [[ -n "$UI_PROMPT_TEXT" ]]; then
+    ui_frame_add_row "Input required:" $'\033[1;36mInput required:\033[0m'
+    ui_frame_add_row "  ${UI_PROMPT_TEXT:0:$UI_LOG_WIDTH}" \
+      $'\033[1;35m  '"${UI_PROMPT_TEXT:0:$UI_LOG_WIDTH}"$'\033[0m'
+    ui_frame_add_border
+  fi
+
   ui_frame_add_row "Recent output:"
   for ((row = 0; row < UI_LOG_LIMIT; row++)); do
     if (( row < ${#UI_LOG_LINES[@]} )); then
@@ -285,6 +298,9 @@ ui_init() {
   UI_RENDER_WIDTH=0
   UI_RENDER_HEIGHT=0
   UI_CLEANED_UP=0
+  UI_PROMPT_TEXT=""
+  UI_PROMPT_REQUEST_FILE=""
+  UI_PROMPT_ACK_FILE=""
 
   trap 'ui_cleanup' EXIT
   trap 'exit 130' INT
@@ -300,6 +316,12 @@ ui_cleanup() {
 
   UI_CLEANED_UP=1
   UI_INTERACTIVE=0
+  if [[ -n "$UI_PROMPT_REQUEST_FILE" ]]; then
+    rm -f -- "$UI_PROMPT_REQUEST_FILE"
+  fi
+  if [[ -n "$UI_PROMPT_ACK_FILE" ]]; then
+    rm -f -- "$UI_PROMPT_ACK_FILE"
+  fi
   printf '\033[0m\033[?25h\033[?1049l'
 }
 
@@ -332,6 +354,78 @@ ui_render() {
   ui_remember_frame
 }
 
+ui_read_tty_secret() {
+  local secret=""
+
+  [[ -r /dev/tty ]] || return 1
+  IFS= read -r -s secret < /dev/tty || return 1
+  printf '%s' "$secret"
+}
+
+ui_sync_prompt_state() {
+  local phase="$1"
+  local prompt=""
+
+  if [[ -n "$UI_PROMPT_REQUEST_FILE" && -s "$UI_PROMPT_REQUEST_FILE" ]]; then
+    IFS= read -r prompt < "$UI_PROMPT_REQUEST_FILE" || true
+  fi
+
+  if [[ -n "$prompt" ]]; then
+    UI_PROMPT_TEXT="$prompt"
+    UI_CURRENT_PHASE="Waiting for password..."
+  else
+    UI_PROMPT_TEXT=""
+    UI_CURRENT_PHASE="$phase"
+  fi
+}
+
+ui_acknowledge_prompt() {
+  if [[ -n "$UI_PROMPT_TEXT" && -n "$UI_PROMPT_ACK_FILE" ]]; then
+    : > "$UI_PROMPT_ACK_FILE"
+  fi
+}
+
+ui_wait_for_prompt_ack() {
+  local attempt
+
+  for ((attempt = 0; attempt < 100; attempt++)); do
+    [[ -f "$UI_PROMPT_ACK_FILE" ]] && return 0
+    sleep 0.05
+  done
+
+  return 1
+}
+
+run_sudo() {
+  local password=""
+
+  if (( UI_INTERACTIVE )); then
+    if sudo -n -v >/dev/null 2>&1; then
+      sudo -n "$@"
+      return
+    fi
+
+    if [[ -z "$UI_PROMPT_REQUEST_FILE" || -z "$UI_PROMPT_ACK_FILE" ]]; then
+      sudo "$@"
+      return
+    fi
+
+    rm -f -- "$UI_PROMPT_ACK_FILE"
+    printf '%s\n' "Enter sudo password" > "$UI_PROMPT_REQUEST_FILE"
+    ui_wait_for_prompt_ack || true
+
+    password="$(ui_read_tty_secret)" || {
+      : > "$UI_PROMPT_REQUEST_FILE"
+      return 1
+    }
+    : > "$UI_PROMPT_REQUEST_FILE"
+    printf '%s\n' "$password" | sudo -S -p '' "$@"
+    return
+  fi
+
+  sudo "$@"
+}
+
 ui_store_log_excerpt() {
   local log_file="$1"
   local line
@@ -360,6 +454,8 @@ ui_run_step() {
   local phase="$1"
   shift
   local log_file
+  local prompt_request_file
+  local prompt_ack_file
   local pid
   local rc
 
@@ -368,12 +464,19 @@ ui_run_step() {
   ui_render
 
   log_file="$(mktemp)"
+  prompt_request_file="$(mktemp)"
+  prompt_ack_file="$(mktemp)"
+  rm -f -- "$prompt_ack_file"
+  UI_PROMPT_REQUEST_FILE="$prompt_request_file"
+  UI_PROMPT_ACK_FILE="$prompt_ack_file"
   "$@" >"$log_file" 2>&1 &
   pid=$!
 
   while kill -0 "$pid" 2>/dev/null; do
     ui_store_log_excerpt "$log_file"
+    ui_sync_prompt_state "$phase"
     ui_render
+    ui_acknowledge_prompt
     sleep 0.15
   done
 
@@ -387,7 +490,11 @@ ui_run_step() {
   fi
 
   ui_store_log_excerpt "$log_file"
-  rm -f "$log_file"
+  UI_PROMPT_TEXT=""
+  UI_CURRENT_PHASE="$phase"
+  rm -f -- "$log_file" "$prompt_request_file" "$prompt_ack_file"
+  UI_PROMPT_REQUEST_FILE=""
+  UI_PROMPT_ACK_FILE=""
 
   ui_render
   return "$rc"
@@ -457,7 +564,7 @@ ensure_homebrew() {
 
   if [[ "$(detect_os)" == "macos" ]]; then
     log "Homebrew may prompt for your macOS administrator password..."
-    sudo -v || die "Administrator access is required to install Homebrew on macOS. Re-run this script from an admin account."
+    run_sudo -v || die "Administrator access is required to install Homebrew on macOS. Re-run this script from an admin account."
   fi
 
   NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -482,8 +589,8 @@ install_packages() {
       ;;
     debian)
       log "Installing packages via apt..."
-      sudo apt-get update -y
-      sudo apt-get install -y zsh git curl build-essential procps file
+      run_sudo apt-get update -y
+      run_sudo apt-get install -y zsh git curl build-essential procps file
       ensure_homebrew
       log "Refreshing Homebrew formulas..."
       brew update
@@ -873,7 +980,7 @@ offer_set_default_shell() {
     if [[ "$(detect_os)" == "macos" ]]; then
       if ! grep -qF "$zsh_path" /etc/shells; then
         warn "$zsh_path not found in /etc/shells; adding it (requires sudo)."
-        echo "$zsh_path" | sudo tee -a /etc/shells >/dev/null
+        printf '%s\n' "$zsh_path" | run_sudo tee -a /etc/shells >/dev/null
       fi
     fi
     chsh -s "$zsh_path" || warn "chsh failed. You may need to run it manually: chsh -s $zsh_path"
