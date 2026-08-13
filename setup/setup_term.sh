@@ -206,8 +206,9 @@ ui_build_frame() {
   done
 
   if [[ -n "$UI_PROMPT_TEXT" ]]; then
-    ui_frame_add_row "Input required:"
-    ui_frame_add_row "  ${UI_PROMPT_TEXT:0:$UI_LOG_WIDTH}"
+    ui_frame_add_row "Input required:" $'\033[1;36mInput required:\033[0m'
+    ui_frame_add_row "  ${UI_PROMPT_TEXT:0:$UI_LOG_WIDTH}" \
+      $'\033[1;33m  '"${UI_PROMPT_TEXT:0:$UI_LOG_WIDTH}"$'\033[0m'
   fi
 
   ui_frame_add_border
@@ -949,7 +950,7 @@ offer_set_default_shell() {
 main() {
   ui_init || true
 
-  run_step_or_plain_with_prompt "Installing prerequisites" "Enter your sudo password to continue..." install_packages || die "Prerequisite installation failed."
+  run_step_or_plain_with_prompt "Installing prerequisites" "Enter sudo password" install_packages || die "Prerequisite installation failed."
   run_step_or_plain "Installing Oh My Zsh" install_oh_my_zsh || die "Oh My Zsh installation failed."
   run_step_or_plain "Installing plugins" install_plugins || die "Plugin installation failed."
   run_step_or_plain "Updating ~/.zshrc" configure_zsh_shell || die "Shell configuration failed."
