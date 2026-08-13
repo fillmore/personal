@@ -363,11 +363,23 @@ run_sudo() {
   local password=""
 
   if (( UI_INTERACTIVE )); then
+    if sudo -n -v >/dev/null 2>&1; then
+      sudo "$@"
+      return
+    fi
+
     UI_CURRENT_PHASE="Waiting for password..."
+    UI_PROMPT_TEXT="Enter sudo password"
+    ui_render
     printf '\033[?25l' > /dev/tty
-    IFS= read -r -s password < /dev/tty || return 1
+    IFS= read -r -s password < /dev/tty || {
+      UI_PROMPT_TEXT=""
+      ui_render
+      return 1
+    }
     printf '\n' > /dev/tty
-    printf '\033[?25l' > /dev/tty
+    UI_PROMPT_TEXT=""
+    ui_render
     printf '%s\n' "$password" | sudo -S -p '' "$@"
     return
   fi
@@ -446,25 +458,6 @@ run_step_or_plain() {
 
   if (( UI_INTERACTIVE )); then
     ui_run_step "$phase" "$@"
-  else
-    log "$phase"
-    "$@"
-  fi
-}
-
-run_step_or_plain_with_prompt() {
-  local phase="$1"
-  local prompt="$2"
-  shift 2
-
-  UI_PROMPT_TEXT="$prompt"
-  if (( UI_INTERACTIVE )); then
-    ui_render
-    ui_run_step "$phase" "$@"
-    local rc=$?
-    UI_PROMPT_TEXT=""
-    ui_render
-    return "$rc"
   else
     log "$phase"
     "$@"
@@ -951,7 +944,7 @@ offer_set_default_shell() {
 main() {
   ui_init || true
 
-  run_step_or_plain_with_prompt "Installing prerequisites" "Enter sudo password" install_packages || die "Prerequisite installation failed."
+  run_step_or_plain "Installing prerequisites" install_packages || die "Prerequisite installation failed."
   run_step_or_plain "Installing Oh My Zsh" install_oh_my_zsh || die "Oh My Zsh installation failed."
   run_step_or_plain "Installing plugins" install_plugins || die "Plugin installation failed."
   run_step_or_plain "Updating ~/.zshrc" configure_zsh_shell || die "Shell configuration failed."
