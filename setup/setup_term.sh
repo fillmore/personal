@@ -4,7 +4,9 @@ set -euo pipefail
 # ===== config =====
 ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
 PLUGINS_DIR="$ZSH_CUSTOM/plugins"
-ZSHRC="$HOME/.zshrc"
+ZSH_CONFIG_DIR="${ZDOTDIR:-$HOME}"
+ZSHRC="$ZSH_CONFIG_DIR/.zshrc"
+ZSHENV="$ZSH_CONFIG_DIR/.zshenv"
 STARSHIP_CONFIG_FILE="${STARSHIP_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/starship.toml}"
 ZELLIJ_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/zellij"
 ZELLIJ_LAYOUTS_DIR="$ZELLIJ_CONFIG_DIR/layouts"
@@ -629,18 +631,8 @@ git_clone_or_update() {
   fi
 }
 
-ensure_plugins_in_zshrc() {
+ensure_shell_paths_in_zshrc() {
   [[ -f "$ZSHRC" ]] || touch "$ZSHRC"
-
-  # Ensure ZSH is set (Oh My Zsh sets this, but keep safe)
-  if ! grep -qE '^export ZSH=' "$ZSHRC" && ! grep -qE '^ZSH=' "$ZSHRC"; then
-    warn "ZSH path not found in ~/.zshrc. Adding default."
-    if grep -qE '^[[:space:]]*plugins=\(' "$ZSHRC"; then
-      perl -0pi -e 's@(^[ \t]*plugins=\()@export ZSH="\$HOME/.oh-my-zsh"\n\n$1@m' "$ZSHRC"
-    else
-      printf '\nexport ZSH="$HOME/.oh-my-zsh"\n' >> "$ZSHRC"
-    fi
-  fi
 
   if ! grep -qF 'brew shellenv' "$ZSHRC"; then
     log "Ensuring Homebrew is available in future zsh sessions..."
@@ -680,69 +672,183 @@ EOF
 export PATH="$HOME/.local/bin:$PATH"
 EOF
   fi
-
-  # Ensure plugins line exists and includes ours.
-  if grep -qE '^[[:space:]]*plugins=\(' "$ZSHRC"; then
-    log "Updating plugins list in ~/.zshrc..."
-    for p in zsh-autosuggestions zsh-autocomplete zsh-syntax-highlighting; do
-      if ! perl -0777 -ne 'exit !(m/^[ \t]*plugins=\((?:.|\n)*?\b'"$p"'\b(?:.|\n)*?\)/m)' "$ZSHRC"; then
-        perl -i -0777 -pe 's/^[ \t]*plugins=\(((?:.|\n)*?)\)/plugins=($1 '"$p"')/m' "$ZSHRC"
-      fi
-    done
-  else
-    log "No plugins=(...) line found. Adding one."
-    printf '\nplugins=(git zsh-autosuggestions zsh-autocomplete zsh-syntax-highlighting)\n' >> "$ZSHRC"
-  fi
-
-  if ! grep -qE '^[[:space:]]*(source|\.)[[:space:]]+.*oh-my-zsh\.sh' "$ZSHRC"; then
-    log "Ensuring Oh My Zsh is initialized in ~/.zshrc..."
-    perl -0pi -e 's@(^[ \t]*plugins=\((?:.|\n)*?\)[ \t]*(?:#[^\r\n]*)?)(\r?\n|\z)@$1$2\nsource "\$ZSH/oh-my-zsh.sh"\n@m' "$ZSHRC"
-  fi
-
-  grep -qE '^[[:space:]]*(source|\.)[[:space:]]+.*oh-my-zsh\.sh' "$ZSHRC" \
-    || die "Failed to add Oh My Zsh initialization to ~/.zshrc."
-
-  # Ensure custom plugins are sourced from ~/.zshrc as well.
-  if ! grep -qE 'zsh-autosuggestions(\.plugin)?\.zsh' "$ZSHRC"; then
-    log "Ensuring zsh-autosuggestions is sourced in ~/.zshrc..."
-    cat >> "$ZSHRC" <<'EOF'
-
-# Ensure autosuggestions loads
-if [ -f "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" ]; then
-  source "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh"
-fi
-EOF
-  fi
-
-  if ! grep -qE 'zsh-autocomplete(\.plugin)?\.zsh' "$ZSHRC"; then
-    log "Ensuring zsh-autocomplete is sourced in ~/.zshrc..."
-    cat >> "$ZSHRC" <<'EOF'
-
-# Ensure autocomplete loads
-if [ -f "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-autocomplete/zsh-autocomplete.plugin.zsh" ]; then
-  source "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-autocomplete/zsh-autocomplete.plugin.zsh"
-fi
-EOF
-  fi
-
-  # Keep syntax-highlighting sourced LAST (recommended by plugin)
-  if ! grep -qE 'zsh-syntax-highlighting\.zsh' "$ZSHRC"; then
-    log "Ensuring zsh-syntax-highlighting is sourced near the end of ~/.zshrc..."
-    cat >> "$ZSHRC" <<'EOF'
-
-# Ensure syntax highlighting loads (keep this near the end of ~/.zshrc)
-if [ -f "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ]; then
-  source "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
-fi
-EOF
-  fi
 }
+
+check_zsh_prerequisites() {
+  have zsh || die "zsh is required. Run the full setup first."
+  have perl || die "perl is required. Install it and re-run."
+  local file
+  for file in "${ZSH:-$HOME/.oh-my-zsh}/oh-my-zsh.sh" \
+    "$AUTOCOMPLETE_DIR/zsh-autocomplete.plugin.zsh" \
+    "$AUTOSUGGEST_DIR/zsh-autosuggestions.zsh" \
+    "$SYNTAX_HL_DIR/zsh-syntax-highlighting.zsh"; do
+    [[ -r "$file" ]] || die "Missing $file. Run the full setup first."
+  done
+}
+
+backup_zsh_config() {
+  local file backup
+  for file in "$ZSHRC" "$ZSHENV"; do
+    if [[ -e "$file" ]]; then
+      backup="$(mktemp "$file.setup-term-backup.XXXXXX")" || return
+      cp -p "$file" "$backup" || return
+      log "Backed up $file to $backup"
+    fi
+  done
+}
+
+ensure_zsh_completion_config() (
+  local tmp
+  tmp="$(mktemp -d)" || return
+  trap 'rm -f "$tmp/zshrc" "$tmp/zshenv"; rmdir "$tmp"' EXIT
+  mkdir -p "$ZSH_CONFIG_DIR" || return
+
+  perl - "$ZSHRC" "$ZSHENV" "$tmp/zshrc" "$tmp/zshenv" <<'PERL' || die "Completion migration failed; no completion changes were applied."
+use strict;
+use warnings;
+
+sub read_config {
+    my ($path) = @_;
+    return "" unless -e $path;
+    open my $fh, "<", $path or die "Cannot read $path: $!\n";
+    local $/;
+    return <$fh> // "";
+}
+
+my ($rc_path, $env_path, $rc_out, $env_out) = @ARGV;
+my $rc = read_config($rc_path);
+my $env = read_config($env_path);
+my $plugins = qr/zsh-(?:autocomplete|autosuggestions|syntax-highlighting)/;
+my $plugin_path = qr/(?:"[^"\n]*\/$plugins(?:\.plugin)?\.zsh"|'[^'\n]*\/$plugins(?:\.plugin)?\.zsh'|[^\s"';&|]*\/$plugins(?:\.plugin)?\.zsh)/;
+my $omz_path = qr/(?:"[^"\n]*\/oh-my-zsh\.sh"|'[^'\n]*\/oh-my-zsh\.sh'|[^\s"';&|]*\/oh-my-zsh\.sh)/;
+my $omz = qr/^[ \t]*(?:source|\.)[ \t]+$omz_path[ \t]*(?:\#[^\n]*)?(?:\n|$)/m;
+
+$rc =~ s{^# >>> setup_term\.sh: completion >>>\n(.*?)^# <<< setup_term\.sh: completion <<<\n?}{
+    my $block = $1;
+    $block =~ /($omz)/ or die "Missing Oh My Zsh source in the managed block in $rc_path.\n";
+    $1;
+}msge;
+$rc =~ s{\n*^# >>> setup_term\.sh: highlighting >>>\n.*?^# <<< setup_term\.sh: highlighting <<<\n?}{}msg;
+
+# Migrate the conditional source blocks emitted by older setup versions.
+$rc =~ s{^# Ensure (?:autosuggestions|autocomplete|syntax highlighting) loads[^\n]*\n}{}mg;
+$rc =~ s{^[ \t]*if \[ -f ("[^\n"]*/$plugins(?:\.plugin)?\.zsh") \]; then\n[ \t]*source \1\n[ \t]*fi\n?}{}mg;
+$rc =~ s{^[ \t]*(?:source|\.)[ \t]+$plugin_path[ \t]*(?:\#[^\n]*)?(?:\n|$)}{}mg;
+
+# Migrate the earlier manual fix, including its post-Oh-My-Zsh bindings.
+$rc =~ s{^# Load autocomplete before Oh My Zsh initializes completion\.\n}{}mg;
+$rc =~ s{^# Preserve autocomplete's bindings after Oh My Zsh's defaults\.\n(?:bindkey[^\n]*\n)+if \[\[ -n "\$\{terminfo\[kcbt\]\}" \]\]; then\n  bindkey "\$\{terminfo\[kcbt\]\}" expand-word\nfi\n?}{}mg;
+$rc =~ s{^[ \t]*compinit(?:[ \t]+[^;&|\n]*)?[ \t]*(?:\n|$)}{}mg;
+
+sub strip_plugins {
+    my ($body) = @_;
+    $body =~ s{^([^\n#]*)(.*)$}{
+        my ($code, $comment) = ($1, $2);
+        $code =~ s{(?<![\w-])(["']?)$plugins\1(?![\w-])}{}g;
+        "$code$comment";
+    }mge;
+    return $body;
+}
+
+$rc =~ s{(^[ \t]*plugins[ \t]*\+?=[ \t]*\()([^()]*)(\))}{
+    my ($start, $body, $end) = ($1, $2, $3);
+    die "Cannot safely migrate dynamic plugins in $rc_path.\n" if $body =~ /[\$`]/;
+    $start . strip_plugins($body) . $end;
+}mge;
+if ($rc =~ /^[^#\n]*(?:source|\.)[ \t]+[^\n]*$plugins(?:\.plugin)?\.zsh/m ||
+    $rc =~ /^[^#\n]*(?:\bcompinit\b[^#\n]*[;&|]|[;&|][^#\n]*\bcompinit\b)/m ||
+    $rc =~ /^[ \t]*plugins[^\n]*[\$`]/m) {
+    die "Cannot safely migrate custom plugin/completion commands in $rc_path. Use simple plugins=(...) and standalone source/compinit lines.\n";
+}
+
+my @sources = $rc =~ /$omz/g;
+die "Multiple Oh My Zsh source commands in $rc_path; keep only one and re-run.\n" if @sources > 1;
+my $other_sources = $rc;
+$other_sources =~ s/$omz//g;
+die "Cannot safely migrate compound Oh My Zsh source commands in $rc_path.\n"
+    if $other_sources =~ /^[^#\n]*(?:source|\.)[ \t]+[^\n]*\/oh-my-zsh\.sh/m;
+unless (@sources) {
+    # Full setup may already have appended its prompt and helper blocks.
+    if ($rc =~ /^# (?:Starship prompt|Zellij IDE layout helper)\n/m) {
+        substr($rc, $-[0], 0, "source \"\$ZSH/oh-my-zsh.sh\"\n\n");
+    } else {
+        $rc .= "\nsource \"\$ZSH/oh-my-zsh.sh\"\n";
+    }
+}
+$rc =~ /$omz/ or die "Cannot locate Oh My Zsh initialization in $rc_path.\n";
+my $source_pos = $-[0];
+my $omz_source = $&;
+chomp $omz_source;
+die "Move compdef commands below Oh My Zsh initialization in $rc_path and re-run.\n"
+    if substr($rc, 0, $source_pos) =~ /^[ \t]*compdef[ \t]/m;
+my $late_plugins = "";
+$rc =~ s{(^[ \t]*plugins[ \t]*=[ \t]*\([^()]*\)[ \t]*(?:\#[^\n]*)?(?:\n|$))}{
+    if ($-[0] > $source_pos) { $late_plugins .= $1; "" } else { $1 }
+}mge;
+my $defaults = $rc =~ /^[ \t]*plugins[ \t]*=/m || $late_plugins ne "" ? "" : "plugins=(git)\n";
+
+my $completion = <<'ZSH';
+# >>> setup_term.sh: completion >>>
+export ZSH="${ZSH:-$HOME/.oh-my-zsh}"
+# Autocomplete must load before Oh My Zsh calls compinit.
+source "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-autocomplete/zsh-autocomplete.plugin.zsh"
+__SETUP_TERM_OMZ_SOURCE__
+source "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh"
+# Oh My Zsh overrides these bindings after autocomplete sets them.
+bindkey '^[[A' up-line-or-search '^[OA' up-line-or-search
+bindkey '^[[B' down-line-or-select '^[OB' down-line-or-select
+if [[ -n "${terminfo[kcbt]}" ]]; then
+  bindkey "${terminfo[kcbt]}" expand-word
+fi
+# <<< setup_term.sh: completion <<<
+ZSH
+$completion =~ s/^__SETUP_TERM_OMZ_SOURCE__$/$omz_source/m;
+$rc =~ s/$omz/$defaults$late_plugins$completion/;
+$rc =~ s/\s*\z/\n/;
+$rc .= <<'ZSH';
+
+# >>> setup_term.sh: highlighting >>>
+# Keep syntax highlighting after all other widget and prompt setup.
+source "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+# <<< setup_term.sh: highlighting <<<
+ZSH
+
+unless ($env =~ s/^([ \t]*(?:export[ \t]+)?skip_global_compinit=)[^\s;#]+/${1}1/mg) {
+    $env .= "\n# Let zsh-autocomplete initialize completion instead of Ubuntu's global zshrc.\nskip_global_compinit=1\n";
+}
+for my $output ([$rc_out, $rc], [$env_out, $env]) {
+    open my $fh, ">", $output->[0] or die "Cannot write $output->[0]: $!\n";
+    print {$fh} $output->[1] or die "Cannot write $output->[0]: $!\n";
+    close $fh or die "Cannot close $output->[0]: $!\n";
+}
+PERL
+
+  zsh -n "$tmp/zshrc" && zsh -n "$tmp/zshenv" \
+    || die "Generated Zsh configuration is invalid; no completion changes were applied."
+  # Write through symlinks rather than replacing dotfile-manager links.
+  cat "$tmp/zshrc" > "$ZSHRC" || return
+  cat "$tmp/zshenv" > "$ZSHENV" || return
+  log "Configured single-load plugins and completion in $ZSHRC and $ZSHENV."
+)
+
+clear_zsh_completion_cache() (
+  shopt -s nullglob
+  local dump
+  for dump in "$ZSH_CONFIG_DIR"/.zcompdump "$ZSH_CONFIG_DIR"/.zcompdump-* \
+    "${XDG_CACHE_HOME:-$HOME/.cache}/zsh/compdump" "${ZSH_COMPDUMP:-}"; do
+    [[ -n "$dump" ]] || continue
+    if [[ -f "$dump" || -f "$dump.zwc" ]]; then
+      log "Removing stale completion cache: $dump"
+      rm -f -- "$dump" "$dump.zwc" || return
+    fi
+  done
+)
 
 ensure_starship_in_zshrc() {
   [[ -f "$ZSHRC" ]] || touch "$ZSHRC"
 
   if perl -0ne 'exit !(m/\n# Starship prompt\nif command -v starship >\/dev\/null 2>&1; then\n  eval "\$\(starship init zsh\)"\nfi\n?/s)' "$ZSHRC" \
-    && ! grep -qE '^[[:space:]]*eval "\$\((/opt/homebrew/bin/|/usr/local/bin/|/home/linuxbrew/.linuxbrew/bin/)?starship init zsh\)"[[:space:]]*$' "$ZSHRC"; then
+    && [[ "$(grep -cE '^[[:space:]]*eval "\$\((/opt/homebrew/bin/|/usr/local/bin/|/home/linuxbrew/.linuxbrew/bin/)?starship init zsh\)"[[:space:]]*$' "$ZSHRC")" == 1 ]]; then
     log "Starship already initialized in ~/.zshrc."
     return
   fi
@@ -903,12 +1009,17 @@ install_plugins() {
 }
 
 configure_zsh_shell() {
-  ensure_plugins_in_zshrc
-  ensure_zellij_alias
+  check_zsh_prerequisites || return
+  backup_zsh_config || return
+  mkdir -p "$ZSH_CONFIG_DIR" || return
+  ensure_shell_paths_in_zshrc || return
+  ensure_starship_in_zshrc || return
+  ensure_zellij_alias || return
+  ensure_zsh_completion_config || return
+  clear_zsh_completion_cache
 }
 
 configure_starship() {
-  ensure_starship_in_zshrc
   ensure_starship_config
 }
 
@@ -990,6 +1101,27 @@ offer_set_default_shell() {
 }
 
 main() {
+  if [[ $# -gt 1 ]]; then
+    die "Usage: bash setup/setup_term.sh [--repair-zsh]"
+  fi
+  case "${1:-}" in
+    --repair-zsh)
+      check_zsh_prerequisites
+      backup_zsh_config
+      ensure_zsh_completion_config
+      clear_zsh_completion_cache
+      log "Zsh configuration repaired. Start a new terminal, or run: exec zsh"
+      return
+      ;;
+    --help|-h)
+      echo "Usage: bash setup/setup_term.sh [--repair-zsh]"
+      echo "  --repair-zsh  Back up and repair existing Zsh configuration without installing or updating packages."
+      return
+      ;;
+    "") ;;
+    *) die "Unknown option: $1. Use --help for usage." ;;
+  esac
+
   ui_init || true
 
   run_step_or_plain "Installing prerequisites" install_packages || die "Prerequisite installation failed."

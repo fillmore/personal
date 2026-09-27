@@ -1,6 +1,6 @@
 # Terminal Setup Script
 
-This folder contains `setup_term.sh`, a bootstrap script for setting up a fresh terminal environment on a new machine.
+This folder contains `setup_term.sh`, a bootstrap script for setting up a fresh terminal environment or repairing an existing Zsh configuration.
 
 It is designed for:
 - **macOS** with `Homebrew`
@@ -61,6 +61,49 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/fillmore/personal/master
 
 ---
 
+## Repair an existing Zsh setup
+
+If pressing **Up** reports `command not found: _autocomplete__history_lines` or
+`_autocomplete__unambiguous`, run:
+
+```bash
+bash setup/setup_term.sh --repair-zsh
+exec zsh
+```
+
+This mode requires Zsh, Perl, Oh My Zsh, and all three plugins to be installed
+already. It does **not** install or update packages/plugins, change your default
+shell, or rewrite Starship, Zellij, or Ghostty settings.
+
+Both full setup and repair mode:
+
+- Back up existing `.zshrc` and `.zshenv` files beside the originals as
+  `.zshrc.setup-term-backup.XXXXXX` and `.zshenv.setup-term-backup.XXXXXX`.
+- Remove the three managed plugins from `plugins=(...)` and migrate the old
+  conditional/direct `source` blocks, including the earlier manual autocomplete fix.
+  Other plugin names, aliases, and user configuration are retained.
+- Load autocomplete once, **before** Oh My Zsh initializes completion; load
+  autosuggestions afterward and syntax highlighting last.
+- Set `skip_global_compinit=1` in `.zshenv` so Ubuntu does not initialize completion
+  too early, and preserve autocomplete's arrow-key bindings after Oh My Zsh loads.
+- Remove stale `.zcompdump`/`.zcompdump-*` caches and their compiled `.zwc` files,
+  plus the autocomplete cache at `${XDG_CACHE_HOME:-$HOME/.cache}/zsh/compdump`.
+  An exported `ZSH_COMPDUMP` path is also cleared. Zsh rebuilds these on restart.
+- Check the generated files with `zsh -n` before writing the completion changes,
+  preserve dotfile symlinks, and produce the same configuration when rerun.
+
+Use a **new shell**, not `source ~/.zshrc`: the old process still has the previous
+completion functions and widgets in memory.
+
+The script honors an exported `ZDOTDIR` for `.zshrc`/`.zshenv` and `ZSH_CUSTOM`
+for plugin locations. If these are set only inside your dotfiles, pass the same
+values in the environment when running setup. Migration supports ordinary
+literal plugin arrays and standalone source/compinit commands; dynamic plugin
+lists or compound completion commands may require manual cleanup. Unsupported
+forms are reported rather than guessed.
+
+---
+
 ## CLI installation behavior
 
 ### macOS
@@ -86,6 +129,7 @@ For `btop`, the script installs it via Homebrew so the version stays aligned wit
 ## Files the script updates
 
 - `~/.zshrc`
+- `~/.zshenv`
 - `~/.config/starship.toml`
 - `~/.config/zellij/layouts/ide.kdl`
 - `~/.config/zellij/config.kdl`
@@ -103,6 +147,20 @@ It also ensures `~/.local/bin` is on your `PATH` for user-local binaries when ne
 - On **Linux**, including **WSL**, the script uses Homebrew for the newer CLI tools and adds the appropriate `brew shellenv` lines to `~/.zshrc`.
 - On Linux, the script can optionally set `zsh` as your default shell. On macOS, it skips that prompt.
 - It is intended to be safe to re-run if you want to refresh the setup.
+
+---
+
+## Regression checks
+
+With Python 3, Perl, and Zsh installed:
+
+```bash
+bash -n setup/setup_term.sh
+python3 -B -m unittest discover -s setup -p 'test_setup_term.py' -v
+```
+
+The tests use temporary home directories and stub plugins; they do not install
+packages or modify your real dotfiles.
 
 ---
 
